@@ -1,16 +1,22 @@
 <!DOCTYPE html>
 <html lang="th">
 <head>
-    
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>พยากรณ์อากาศสวนชัยเสนะ - ต.สทิงหม้อ</title>
+    <title>พยากรณ์อากาศและบริหารสวนคุณพ่อ - ต.สทิงหม้อ</title>
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <!-- Leaflet CSS (สำหรับแผนที่แปลงสวน) -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
     <style> 
         body { font-family: 'Sarabun', sans-serif; } 
         .radar-container { position: relative; width: 100%; padding-bottom: 75%; height: 0; overflow: hidden; border-radius: 1rem; }
         .radar-container iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+        /* แก้ไข z-index แผนที่ให้ไม่ทับเมนูอื่น */
+        #farm-map { z-index: 10; }
     </style>
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen p-3 md:p-6">
@@ -18,63 +24,65 @@
         
         <!-- Header -->
         <div class="bg-emerald-700 p-5 text-center text-white">
-            <h1 class="text-2xl font-extrabold">🌾 สวนชัยเสนะ (สวนพ่อ)</h1>
-            <p class="text-emerald-100 text-xs mt-1">ต.สทิงหม้อ อ.สิงหนคร (7.2329°N, 100.5354°E)</p>
+            <h1 class="text-2xl font-extrabold">🌾 สวนคุณพ่อ (ซอยคนรวย)</h1>
+            <p class="text-emerald-100 text-xs mt-1">ต.สทิงหม้อ อ.สิงหนคร</p>
         </div>
 
         <div class="p-4 space-y-4">
             <div id="loading" class="text-center py-12 text-slate-400 font-bold text-lg animate-pulse">
-                ⏳ กำลังโหลดข้อมูลสภาพอากาศ...
+                ⏳ กำลังโหลดข้อมูลสภาพอากาศและแผนที่สวน...
             </div>
 
             <div id="content" class="hidden space-y-4">
                 
-                <!-- 🚨 ป้ายเตือนสถานะฝนตก -->
+                <!-- 🚨 ป้ายเตือนสถานะฝนตกเรียลไทม์ -->
                 <div id="live-rain-alert"></div>
                 
                 <!-- Main Status -->
                 <div class="bg-slate-700/50 p-4 rounded-2xl border border-slate-600 text-center">
                     <div id="temp" class="text-5xl font-extrabold text-amber-400">--°C</div>
                     <div id="weather-desc" class="text-slate-300 font-semibold text-lg mt-1">--</div>
-                    <div id="last-updated" class="text-xs text-slate-400 mt-2">--</div>
+                    
+                    <!-- อธิบายความรู้สึกของลม -->
+                    <div class="mt-3 pt-3 border-t border-slate-600 text-xs space-y-1">
+                        <div>ความเร็วลม: <span id="wind" class="text-amber-300 font-bold">--</span></div>
+                        <div id="wind-feel" class="text-emerald-300 font-bold">--</div>
+                    </div>
                 </div>
 
-                <!-- 📡 แผนที่เรดาร์ฝน (ฟังก์ชันใหม่!) -->
+                <!-- 💧 คำแนะนำการรดน้ำ (สายยาง) -->
+                <div id="water-guide" class="p-4 rounded-2xl border shadow-md font-bold text-center text-lg leading-relaxed">
+                    <!-- จะถูกเติมด้วย JS -->
+                </div>
+
+                <!-- 🗺️ แผนที่ขอบเขตแปลงสวนจริง -->
                 <div class="bg-slate-700/30 p-3 rounded-2xl border border-slate-600">
-                    <h3 class="text-sm font-bold text-emerald-400 mb-2">📡 เรดาร์ตรวจกลุ่มฝน (กด Play เพื่อดูทิศทาง)</h3>
+                    <h3 class="text-sm font-bold text-emerald-400 mb-2">📍 ขอบเขตแปลงสวน (ดาวเทียม)</h3>
+                    <div id="farm-map" class="h-48 w-full rounded-xl border border-slate-600 shadow-inner"></div>
+                </div>
+
+                <!-- 📡 แผนที่เรดาร์ฝน & ลม -->
+                <div class="bg-slate-700/30 p-3 rounded-2xl border border-slate-600">
+                    <h3 class="text-sm font-bold text-emerald-400 mb-2">📡 เรดาร์กลุ่มฝนและลม (กด Play ดูทิศทาง)</h3>
                     <div class="radar-container border border-slate-600 shadow-inner">
-                        <!-- แผนที่พิกัดตรงกับสวนคุณพ่อ ซูมระดับ 10 -->
-                        <iframe src="https://embed.windy.com/embed.html?type=map&location=coordinates&metricRain=mm&metricTemp=%C2%B0C&metricWind=km%2Fh&zoom=10&overlay=rain&product=ecmwf&level=surface&lat=7.232917&lon=100.535472&detailLat=7.232917&detailLon=100.535472&marker=true" frameborder="0"></iframe>
+                        <iframe src="https://embed.windy.com/embed.html?type=map&location=coordinates&metricRain=mm&metricTemp=%C2%B0C&metricWind=km%2Fh&zoom=11&overlay=rain&product=ecmwf&level=surface&lat=7.2336&lon=100.5361&detailLat=7.2336&detailLon=100.5361&marker=true" frameborder="0"></iframe>
                     </div>
                 </div>
 
-                <!-- Daily Summary Box -->
-                <div class="bg-indigo-950/50 p-4 rounded-2xl border border-indigo-800/50">
-                    <h3 class="text-sm font-bold text-indigo-300 mb-1">📋 สรุปพยากรณ์วันนี้</h3>
-                    <p id="daily-summary" class="text-sm text-indigo-100 leading-relaxed font-medium">กำลังสรุปข้อมูล...</p>
-                </div>
-
-                <!-- Metrics Grid -->
-                <div class="grid grid-cols-2 gap-3">
-                    <div class="bg-blue-950/40 p-3 rounded-2xl border border-blue-800/50 text-center">
-                        <div class="text-blue-400 text-xs font-bold">🌧️ ปริมาณฝนตอนนี้</div>
-                        <div id="rain" class="text-xl font-extrabold text-blue-200 mt-0.5">-- มม.</div>
-                    </div>
-                    <div class="bg-amber-950/40 p-3 rounded-2xl border border-amber-800/50 text-center">
-                        <div class="text-amber-400 text-xs font-bold">🍃 ความเร็วลม</div>
-                        <div id="wind" class="text-xl font-extrabold text-amber-200 mt-0.5">-- กม./ชม.</div>
-                    </div>
-                </div>
-
-                <!-- Smart Advisory -->
-                <div id="advisory-box" class="p-4 rounded-2xl border text-sm leading-relaxed font-bold">
-                    💡 กำลังวิเคราะห์ข้อมูล...
-                </div>
-
-                <!-- Hourly Forecast -->
+                <!-- ⏱️ คาดการณ์รายชั่วโมง (6 ชั่วโมงข้างหน้า) -->
                 <div>
-                    <h3 class="text-sm font-bold text-slate-300 mb-2">⏱️ คาดการณ์ฝน (6 ชั่วโมงข้างหน้า)</h3>
+                    <h3 class="text-sm font-bold text-slate-300 mb-2">⏱️ คาดการณ์ฝน (6 ชม. ข้างหน้า)</h3>
                     <div id="hourly-container" class="flex gap-2 overflow-x-auto pb-2"></div>
+                </div>
+
+                <!-- 📅 พยากรณ์ล่วงหน้า 2 วัน (พรุ่งนี้ & มะรืนนี้) -->
+                <div>
+                    <h3 class="text-sm font-bold text-slate-300 mb-2">📅 วางแผนล่วงหน้า</h3>
+                    <div id="daily-forecast-container" class="grid grid-cols-2 gap-3"></div>
+                </div>
+
+                <div class="text-center text-xs text-slate-500 mt-2">
+                    <span id="last-updated">--</span>
                 </div>
 
                 <button onclick="fetchWeather()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold py-3.5 rounded-2xl shadow-lg transition text-base">
@@ -84,18 +92,66 @@
         </div>
     </div>
 
+    <!-- Leaflet JS (สำหรับแผนที่แปลงสวน) -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
     <script>
-        const LAT = 7.232917; 
-        const LON = 100.535472; 
+        // พิกัดศูนย์กลางแปลง (คำนวณจาก 4 จุด)
+        const LAT = 7.23367; 
+        const LON = 100.53612; 
+
+        // พิกัดขอบเขตสวนทั้ง 4 จุด
+        const farmBoundary = [
+            [7.232721, 100.535317],
+            [7.232858, 100.535242],
+            [7.234679, 100.536866],
+            [7.234461, 100.537057]
+        ];
+
+        // ฟังก์ชันสร้างแผนที่ Leaflet
+        function initMap() {
+            // สร้างแผนที่และตั้งค่าเริ่มต้น
+            const map = L.map('farm-map', {
+                zoomControl: false,
+                dragging: true,
+                scrollWheelZoom: false
+            });
+
+            // ใช้ Google Satellite Map (ภาพถ่ายดาวเทียมจริง)
+            L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+                maxZoom: 20,
+                attribution: '© Google'
+            }).addTo(map);
+
+            // วาดรูปแปลง (Polygon) สีเขียวสะท้อนแสง
+            const polygon = L.polygon(farmBoundary, {
+                color: '#10b981',
+                weight: 3,
+                fillColor: '#10b981',
+                fillOpacity: 0.2
+            }).addTo(map);
+
+            // ให้แผนที่ซูมเข้าพอดีกับขอบเขตสวน
+            map.fitBounds(polygon.getBounds());
+        }
 
         function getWeatherDescription(code) {
             const codes = {
-                0: "ท้องฟ้าแจ่มใส ☀️", 1: "โปร่ง มีเมฆบางส่วน 🌤️", 2: "มีเมฆเป็นบางส่วน ⛅", 3: "เมฆเต็มท้องฟ้า ☁️",
-                45: "มีหมอกลง 🌫️", 48: "มีหมอกน้ำค้าง 🌫️", 51: "ฝนละอองเบาบาง 🌦️", 53: "ฝนละอองปานกลาง 🌦️",
+                0: "แดดจัด ☀️", 1: "มีเมฆบางส่วน 🌤️", 2: "มีเมฆเป็นบางส่วน ⛅", 3: "เมฆเต็มท้องฟ้า ☁️",
+                45: "มีหมอกลง 🌫️", 48: "หมอกหนา 🌫️", 51: "ฝนละอองเบาบาง 🌦️", 53: "ฝนตกปรอยๆ 🌦️",
                 55: "ฝนละอองหนาแน่น 🌧️", 61: "ฝนตกเล็กน้อย 🌧️", 63: "ฝนตกปานกลาง 🌧️", 65: "ฝนตกหนัก 🌧️⚡",
-                80: "ฝนซาเบาบาง 🌦️", 81: "ฝนซาปานกลาง 🌧️", 82: "ฝนซาหนักมาก 🌧️⚡", 95: "พายุฝนฟ้าคะนอง ⛈️", 96: "พายุฝนลูกเห็บ ⛈️"
+                80: "ฝนซาเบาบาง 🌦️", 81: "ฝนซาปานกลาง 🌧️", 82: "ฝนซาหนักมาก 🌧️⚡", 95: "พายุฝนฟ้าคะนอง ⛈️", 96: "พายุลูกเห็บ ⛈️"
             };
             return codes[code] || "สภาพอากาศทั่วไป 🌤️";
+        }
+
+        // แปลงความเร็วลมเป็นความรู้สึกจริง
+        function getWindFeel(speed) {
+            if (speed <= 5) return "🍃 ลมแผ่วเบา (อากาศนิ่ง ใบไม้ไม่กระดิก)";
+            if (speed <= 15) return "🍃 ลมพัดอ่อนๆ (เย็นสบาย ใบไม้พลิ้วไหว)";
+            if (speed <= 25) return "⚠️ ลมปานกลาง (เริ่มตึงมือ ระวังละอองยาปลิว)";
+            if (speed <= 40) return "🌬️ ลมแรงจัด (กิ่งไม้โยก เดินต้านลม)";
+            return "🚨 ลมพายุพัดแรง (งดทำงานในสวนเด็ดขาด)";
         }
 
         async function fetchWeather() {
@@ -103,7 +159,7 @@
             document.getElementById('content').classList.add('hidden');
 
             try {
-                const url = `https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}&current=temperature_2m,precipitation,wind_speed_10m,weather_code&hourly=temperature_2m,precipitation_probability&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max&timezone=Asia%2FBangkok`;
+                const url = `https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}&current=temperature_2m,precipitation,wind_speed_10m,weather_code&hourly=temperature_2m,precipitation_probability&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,et0_fao_evapotranspiration&timezone=Asia%2FBangkok&forecast_days=3`;
                 
                 const response = await fetch(url);
                 if (!response.ok) throw new Error("API Error");
@@ -113,6 +169,7 @@
                 const hourly = data.hourly;
                 const daily = data.daily;
 
+                // 1. ป้ายเตือนฝน
                 const alertBox = document.getElementById('live-rain-alert');
                 const isRaining = current.precipitation > 0 || [51,53,55,61,63,65,80,81,82,95,96].includes(current.weather_code);
                 
@@ -120,51 +177,44 @@
                     alertBox.innerHTML = `
                         <div class="bg-rose-600 border border-rose-400 text-white p-4 rounded-2xl text-center shadow-lg animate-pulse">
                             <div class="text-2xl font-extrabold mb-1">🌧️ ฝนกำลังตก!</div>
-                            <div class="text-rose-100 text-sm font-semibold">ปริมาณ ${current.precipitation} มม.</div>
+                            <div class="text-rose-100 text-sm font-semibold">วันนี้มีปริมาณฝนแล้ว ${daily.precipitation_sum[0]} มม.</div>
                         </div>
                     `;
                 } else {
                     alertBox.innerHTML = `
-                        <div class="bg-emerald-600/80 border border-emerald-500 text-white p-4 rounded-2xl text-center shadow-md">
-                            <div class="text-xl font-bold">☀️ ขณะนี้ฝนไม่ตก</div>
+                        <div class="bg-emerald-600/80 border border-emerald-500 text-white p-3 rounded-2xl text-center shadow-md">
+                            <div class="text-lg font-bold">☀️ ขณะนี้ฝนไม่ตก</div>
                         </div>
                     `;
                 }
 
-                document.getElementById('temp').innerText = `${current.temperature_2m} °C`;
-                document.getElementById('rain').innerText = `${current.precipitation} มม.`;
-                document.getElementById('wind').innerText = `${current.wind_speed_10m} กม./ชม.`;
+                // ข้อมูลปัจจุบัน
+                document.getElementById('temp').innerText = `${current.temperature_2m}°C`;
                 document.getElementById('weather-desc').innerText = getWeatherDescription(current.weather_code);
+                document.getElementById('wind').innerText = `${current.wind_speed_10m} กม./ชม.`;
+                document.getElementById('wind-feel').innerText = getWindFeel(current.wind_speed_10m);
                 
                 const now = new Date();
                 document.getElementById('last-updated').innerText = `อัปเดตล่าสุด: ${now.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })} น.`;
 
-                const maxTemp = daily.temperature_2m_max[0];
-                const minTemp = daily.temperature_2m_min[0];
-                const rainProb = daily.precipitation_probability_max[0];
-                const rainSum = daily.precipitation_sum[0];
-                const dailyDesc = getWeatherDescription(daily.weather_code[0]);
-                
-                let summaryText = `สภาพอากาศโดยรวม: ${dailyDesc} อุณหภูมิ ${minTemp}°C - ${maxTemp}°C `;
-                if(rainProb > 0) {
-                    summaryText += `โอกาสเกิดฝนสูงสุด ${rainProb}% (ปริมาณน้ำฝนรวม ${rainSum} มม.)`;
-                } else {
-                    summaryText += `ไม่มีแนวโน้มฝนตกในวันนี้ เหมาะแก่การทำงานในสวน`;
-                }
-                document.getElementById('daily-summary').innerText = summaryText;
+                // 2. คำแนะนำรดน้ำ (สายยาง)
+                const waterGuide = document.getElementById('water-guide');
+                const et0Today = daily.et0_fao_evapotranspiration[0];
+                const rainSumToday = daily.precipitation_sum[0];
+                const tomorrowRainProb = daily.precipitation_probability_max[1];
 
-                const advBox = document.getElementById('advisory-box');
-                if (current.wind_speed_10m > 15) {
-                    advBox.className = "p-4 rounded-2xl border text-sm bg-amber-950/80 border-amber-600 text-amber-200 font-bold";
-                    advBox.innerText = "⚠️ ลมค่อนข้างแรง (เกิน 15 กม./ชม.): ระวังการพ่นยาหรือปุ๋ยทางใบ ละอองจะปลิวสูญหาย";
-                } else if (isRaining) {
-                    advBox.className = "p-4 rounded-2xl border text-sm bg-blue-950/80 border-blue-600 text-blue-200 font-bold";
-                    advBox.innerText = "🌧️ กำลังมีฝนตก: ชะลอการรดน้ำ และตรวจเช็คทางระบายน้ำ";
+                if (isRaining || rainSumToday >= et0Today) {
+                    waterGuide.className = "p-4 rounded-2xl border shadow-md font-bold text-center bg-rose-950/80 border-rose-600 text-rose-200";
+                    waterGuide.innerHTML = `🔴 วันนี้ไม่ต้องรดน้ำ<br><span class="text-sm font-medium text-rose-300">(ฝนตกเพียงพอแล้ว พักได้เลย)</span>`;
+                } else if (rainSumToday > 0 || tomorrowRainProb > 60) {
+                    waterGuide.className = "p-4 rounded-2xl border shadow-md font-bold text-center bg-amber-950/80 border-amber-600 text-amber-200";
+                    waterGuide.innerHTML = `🟡 รดน้ำแค่ครึ่งเดียวพอ<br><span class="text-sm font-medium text-amber-300">(พรุ่งนี้โอกาสฝนตก ${tomorrowRainProb}% รดผ่านๆ พอชุ่มหน้าดิน)</span>`;
                 } else {
-                    advBox.className = "p-4 rounded-2xl border text-sm bg-emerald-950/80 border-emerald-600 text-emerald-200 font-bold";
-                    advBox.innerText = "✅ สภาพอากาศเอื้ออำนวย: ลมสงบ เหมาะสำหรับการทำงาน หรือเก็บเกี่ยวผลผลิต";
+                    waterGuide.className = "p-4 rounded-2xl border shadow-md font-bold text-center bg-emerald-950/80 border-emerald-600 text-emerald-200";
+                    waterGuide.innerHTML = `🟢 วันนี้ต้องรดน้ำ<br><span class="text-sm font-medium text-emerald-300">(แนะนำลากสายยางรดช่วงเช้า 06.00-08.00 น.)</span>`;
                 }
 
+                // 3. คาดการณ์รายชั่วโมง
                 const hourlyContainer = document.getElementById('hourly-container');
                 hourlyContainer.innerHTML = '';
                 let startIndex = hourly.time.findIndex(t => t.startsWith(current.time.slice(0, 13)));
@@ -184,8 +234,38 @@
                     `;
                 }
 
+                // 4. พยากรณ์ล่วงหน้า 2 วัน
+                const dailyContainer = document.getElementById('daily-forecast-container');
+                dailyContainer.innerHTML = '';
+                const dayLabels = ["พรุ่งนี้", "มะรืนนี้"];
+
+                for (let i = 1; i <= 2; i++) {
+                    const label = dayLabels[i - 1];
+                    const rainProb = daily.precipitation_probability_max[i];
+                    const rainSum = daily.precipitation_sum[i];
+                    const tempMax = daily.temperature_2m_max[i];
+                    const tempMin = daily.temperature_2m_min[i];
+
+                    dailyContainer.innerHTML += `
+                        <div class="bg-slate-700/40 p-3 rounded-2xl border border-slate-600 text-center">
+                            <div class="text-xs text-emerald-400 font-bold mb-1">${label}</div>
+                            <div class="text-sm font-extrabold text-slate-200">${tempMin}°C - ${tempMax}°C</div>
+                            <div class="text-xs text-blue-300 font-bold mt-1">☔ โอกาสฝน ${rainProb}%</div>
+                            <div class="text-[11px] text-slate-400 mt-0.5">ปริมาณฝน ~${rainSum} มม.</div>
+                        </div>
+                    `;
+                }
+
                 document.getElementById('loading').classList.add('hidden');
                 document.getElementById('content').classList.remove('hidden');
+
+                // เรียกใช้แผนที่หลังจากโหลด UI เสร็จ (ป้องกันบั๊กแผนที่โหลดไม่เต็มกรอบ)
+                setTimeout(() => {
+                    if (!window.mapInitialized) {
+                        initMap();
+                        window.mapInitialized = true;
+                    }
+                }, 100);
 
             } catch (error) {
                 document.getElementById('loading').classList.add('hidden');
