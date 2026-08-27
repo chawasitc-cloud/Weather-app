@@ -15,8 +15,9 @@
         body { font-family: 'Sarabun', sans-serif; } 
         .radar-container { position: relative; width: 100%; padding-bottom: 75%; height: 0; overflow: hidden; border-radius: 1rem; }
         .radar-container iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
-        /* แก้ไข z-index แผนที่ให้ไม่ทับเมนูอื่น */
         #farm-map { z-index: 10; }
+        /* ตั้งค่าให้เข็มทิศหมุนได้ลื่นไหล */
+        #compass-dial { transition: transform 0.1s ease-out; }
     </style>
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen p-3 md:p-6">
@@ -38,15 +39,58 @@
                 <!-- 🚨 ป้ายเตือนสถานะฝนตกเรียลไทม์ -->
                 <div id="live-rain-alert"></div>
                 
-                <!-- Main Status -->
-                <div class="bg-slate-700/50 p-4 rounded-2xl border border-slate-600 text-center">
+                <!-- Main Status & พระอาทิตย์ขึ้น-ตก -->
+                <div class="bg-slate-700/50 p-4 rounded-2xl border border-slate-600 text-center shadow-md">
                     <div id="temp" class="text-5xl font-extrabold text-amber-400">--°C</div>
                     <div id="weather-desc" class="text-slate-300 font-semibold text-lg mt-1">--</div>
                     
-                    <!-- อธิบายความรู้สึกของลม -->
-                    <div class="mt-3 pt-3 border-t border-slate-600 text-xs space-y-1">
+                    <div class="grid grid-cols-2 gap-4 mt-3 pt-3 border-t border-slate-600 text-sm">
+                        <div class="flex flex-col items-center justify-center">
+                            <span class="text-xl">🌅</span>
+                            <span class="text-slate-400 text-xs mt-1">ขึ้น: <span id="sunrise" class="font-bold text-emerald-300">--:--</span> น.</span>
+                        </div>
+                        <div class="flex flex-col items-center justify-center border-l border-slate-600">
+                            <span class="text-xl">🌇</span>
+                            <span class="text-slate-400 text-xs mt-1">ตก: <span id="sunset" class="font-bold text-amber-300">--:--</span> น.</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 🧭 เข็มทิศ & ความเร็วลม -->
+                <div class="bg-indigo-950/40 p-4 rounded-2xl border border-indigo-800/50 text-center">
+                    <h3 class="text-sm font-bold text-indigo-300 mb-2">🧭 ทิศทางและสภาพลม</h3>
+                    <div class="text-xs mb-3 space-y-1">
                         <div>ความเร็วลม: <span id="wind" class="text-amber-300 font-bold">--</span></div>
                         <div id="wind-feel" class="text-emerald-300 font-bold">--</div>
+                    </div>
+                    
+                    <button id="compass-btn" onclick="startCompass()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2.5 rounded-xl text-sm shadow-md transition">
+                        กดเพื่อเปิดเข็มทิศดูทิศลม 📲
+                    </button>
+                    
+                    <div id="compass-ui" class="hidden flex-col items-center mt-3">
+                        <div class="relative w-40 h-40 rounded-full border-4 border-slate-600 bg-slate-800 shadow-inner flex justify-center">
+                            <!-- ขีดแดงชี้ทิศหัวโทรศัพท์ -->
+                            <div class="absolute top-0 w-1 h-3 bg-rose-500 z-20 rounded-b-md"></div>
+                            
+                            <!-- แป้นเข็มทิศหมุน -->
+                            <div id="compass-dial" class="absolute w-full h-full rounded-full">
+                                <div class="absolute top-1 left-1/2 -translate-x-1/2 text-rose-400 font-extrabold text-sm z-10">N</div>
+                                <div class="absolute bottom-1 left-1/2 -translate-x-1/2 text-slate-400 font-bold text-sm z-10">S</div>
+                                <div class="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-sm z-10">E</div>
+                                <div class="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-sm z-10">W</div>
+                                
+                                <!-- ไอคอนลม (ปักตามองศาลมจริง) -->
+                                <div id="wind-direction-container" class="absolute inset-0 w-full h-full">
+                                    <!-- แกนหมุนไอคอนลม -->
+                                    <div class="absolute top-4 left-1/2 -translate-x-1/2 text-cyan-300 text-xl drop-shadow-[0_0_5px_rgba(34,211,238,0.8)] z-10">🌬️</div>
+                                </div>
+                            </div>
+                        </div>
+                        <p class="text-[11px] text-slate-400 mt-3 leading-relaxed">
+                            หมุนโทรศัพท์เพื่อดูทิศ (ขีดแดงคือทิศที่หันหน้าไป)<br>
+                            ไอคอน 🌬️ คือจุดที่ <span class="text-cyan-300 font-bold">"ลมพัดมา"</span>
+                        </p>
                     </div>
                 </div>
 
@@ -96,11 +140,10 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
     <script>
-        // พิกัดศูนย์กลางแปลง (คำนวณจาก 4 จุด)
         const LAT = 7.23367; 
         const LON = 100.53612; 
+        let currentWindDir = 0; // เก็บค่าทิศทางลม
 
-        // พิกัดขอบเขตสวนทั้ง 4 จุด
         const farmBoundary = [
             [7.232721, 100.535317],
             [7.232858, 100.535242],
@@ -108,30 +151,10 @@
             [7.234461, 100.537057]
         ];
 
-        // ฟังก์ชันสร้างแผนที่ Leaflet
         function initMap() {
-            // สร้างแผนที่และตั้งค่าเริ่มต้น
-            const map = L.map('farm-map', {
-                zoomControl: false,
-                dragging: true,
-                scrollWheelZoom: false
-            });
-
-            // ใช้ Google Satellite Map (ภาพถ่ายดาวเทียมจริง)
-            L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
-                maxZoom: 20,
-                attribution: '© Google'
-            }).addTo(map);
-
-            // วาดรูปแปลง (Polygon) สีเขียวสะท้อนแสง
-            const polygon = L.polygon(farmBoundary, {
-                color: '#10b981',
-                weight: 3,
-                fillColor: '#10b981',
-                fillOpacity: 0.2
-            }).addTo(map);
-
-            // ให้แผนที่ซูมเข้าพอดีกับขอบเขตสวน
+            const map = L.map('farm-map', { zoomControl: false, dragging: true, scrollWheelZoom: false });
+            L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', { maxZoom: 20, attribution: '© Google' }).addTo(map);
+            const polygon = L.polygon(farmBoundary, { color: '#10b981', weight: 3, fillColor: '#10b981', fillOpacity: 0.2 }).addTo(map);
             map.fitBounds(polygon.getBounds());
         }
 
@@ -145,7 +168,6 @@
             return codes[code] || "สภาพอากาศทั่วไป 🌤️";
         }
 
-        // แปลงความเร็วลมเป็นความรู้สึกจริง
         function getWindFeel(speed) {
             if (speed <= 5) return "🍃 ลมแผ่วเบา (อากาศนิ่ง ใบไม้ไม่กระดิก)";
             if (speed <= 15) return "🍃 ลมพัดอ่อนๆ (เย็นสบาย ใบไม้พลิ้วไหว)";
@@ -154,12 +176,53 @@
             return "🚨 ลมพายุพัดแรง (งดทำงานในสวนเด็ดขาด)";
         }
 
+        // ระบบเข็มทิศ
+        function startCompass() {
+            if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+                DeviceOrientationEvent.requestPermission()
+                    .then(permissionState => {
+                        if (permissionState === 'granted') {
+                            activateCompass();
+                        } else {
+                            alert("กรุณาอนุญาตให้ระบบเข้าถึงเซ็นเซอร์เพื่อเปิดเข็มทิศครับ");
+                        }
+                    }).catch(console.error);
+            } else {
+                activateCompass();
+            }
+        }
+
+        function activateCompass() {
+            document.getElementById('compass-btn').classList.add('hidden');
+            document.getElementById('compass-ui').classList.remove('hidden');
+            document.getElementById('compass-ui').classList.add('flex');
+            
+            // ใช้ Absolute สำหรับ Android, ปกติสำหรับ iOS
+            if ('ondeviceorientationabsolute' in window) {
+                window.addEventListener('deviceorientationabsolute', handleOrientation);
+            } else {
+                window.addEventListener('deviceorientation', handleOrientation);
+            }
+        }
+
+        function handleOrientation(event) {
+            let heading = event.webkitCompassHeading; // สำหรับ iOS
+            if (typeof heading === 'undefined' || heading === null) {
+                heading = 360 - event.alpha; // สำหรับ Android
+            }
+            if (heading !== null) {
+                // หมุนหน้าปัดเข็มทิศ
+                document.getElementById('compass-dial').style.transform = `rotate(${-heading}deg)`;
+            }
+        }
+
         async function fetchWeather() {
             document.getElementById('loading').classList.remove('hidden');
             document.getElementById('content').classList.add('hidden');
 
             try {
-                const url = `https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}&current=temperature_2m,precipitation,wind_speed_10m,weather_code&hourly=temperature_2m,precipitation_probability&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,et0_fao_evapotranspiration&timezone=Asia%2FBangkok&forecast_days=3`;
+                // เพิ่ม wind_direction_10m, sunrise, sunset ใน URL
+                const url = `https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}&current=temperature_2m,precipitation,wind_speed_10m,wind_direction_10m,weather_code&hourly=temperature_2m,precipitation_probability&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,et0_fao_evapotranspiration,sunrise,sunset&timezone=Asia%2FBangkok&forecast_days=3`;
                 
                 const response = await fetch(url);
                 if (!response.ok) throw new Error("API Error");
@@ -169,7 +232,17 @@
                 const hourly = data.hourly;
                 const daily = data.daily;
 
-                // 1. ป้ายเตือนฝน
+                // อัปเดตทิศทางลมในเข็มทิศ (ให้ไอคอนไปอยู่ตามองศาลม)
+                currentWindDir = current.wind_direction_10m;
+                document.getElementById('wind-direction-container').style.transform = `rotate(${currentWindDir}deg)`;
+
+                // ดึงเวลาพระอาทิตย์ขึ้น-ตก
+                const sunriseTime = new Date(daily.sunrise[0]).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+                const sunsetTime = new Date(daily.sunset[0]).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+                document.getElementById('sunrise').innerText = sunriseTime;
+                document.getElementById('sunset').innerText = sunsetTime;
+
+                // ป้ายเตือนฝน
                 const alertBox = document.getElementById('live-rain-alert');
                 const isRaining = current.precipitation > 0 || [51,53,55,61,63,65,80,81,82,95,96].includes(current.weather_code);
                 
@@ -197,7 +270,7 @@
                 const now = new Date();
                 document.getElementById('last-updated').innerText = `อัปเดตล่าสุด: ${now.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })} น.`;
 
-                // 2. คำแนะนำรดน้ำ (สายยาง)
+                // คำแนะนำรดน้ำ (สายยาง)
                 const waterGuide = document.getElementById('water-guide');
                 const et0Today = daily.et0_fao_evapotranspiration[0];
                 const rainSumToday = daily.precipitation_sum[0];
@@ -211,10 +284,10 @@
                     waterGuide.innerHTML = `🟡 รดน้ำแค่ครึ่งเดียวพอ<br><span class="text-sm font-medium text-amber-300">(พรุ่งนี้โอกาสฝนตก ${tomorrowRainProb}% รดผ่านๆ พอชุ่มหน้าดิน)</span>`;
                 } else {
                     waterGuide.className = "p-4 rounded-2xl border shadow-md font-bold text-center bg-emerald-950/80 border-emerald-600 text-emerald-200";
-                    waterGuide.innerHTML = `🟢 วันนี้ต้องรดน้ำ<br><span class="text-sm font-medium text-emerald-300">(แนะนำลากสายยางรดช่วงเช้า 06.00-08.00 น.)</span>`;
+                    waterGuide.innerHTML = `🟢 วันนี้ต้องรดน้ำ<br><span class="text-sm font-medium text-emerald-300">(แนะนำลากสายยางรดช่วงเช้า หรือรดเย็นก่อน ${sunsetTime} น.)</span>`;
                 }
 
-                // 3. คาดการณ์รายชั่วโมง
+                // คาดการณ์รายชั่วโมง
                 const hourlyContainer = document.getElementById('hourly-container');
                 hourlyContainer.innerHTML = '';
                 let startIndex = hourly.time.findIndex(t => t.startsWith(current.time.slice(0, 13)));
@@ -234,7 +307,7 @@
                     `;
                 }
 
-                // 4. พยากรณ์ล่วงหน้า 2 วัน
+                // พยากรณ์ล่วงหน้า 2 วัน
                 const dailyContainer = document.getElementById('daily-forecast-container');
                 dailyContainer.innerHTML = '';
                 const dayLabels = ["พรุ่งนี้", "มะรืนนี้"];
@@ -259,7 +332,7 @@
                 document.getElementById('loading').classList.add('hidden');
                 document.getElementById('content').classList.remove('hidden');
 
-                // เรียกใช้แผนที่หลังจากโหลด UI เสร็จ (ป้องกันบั๊กแผนที่โหลดไม่เต็มกรอบ)
+                // เริ่มแผนที่
                 setTimeout(() => {
                     if (!window.mapInitialized) {
                         initMap();
