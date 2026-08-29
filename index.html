@@ -144,9 +144,24 @@
                     <div id="farm-map" class="h-48 w-full rounded-xl border border-slate-600 shadow-inner"></div>
                 </div>
 
-                <!-- 📡 แผนที่เรดาร์ฝน & ลม -->
+                <!-- 📡 เรดาร์ฝนจริง (ข้อมูลสังเกตการณ์จริง ไม่ใช่โมเดลพยากรณ์) -->
                 <div class="bg-slate-700/30 p-3 rounded-2xl border border-slate-600">
-                    <h3 class="text-sm font-bold text-emerald-400 mb-2">📡 เรดาร์กลุ่มฝนและลม (กด Play ดูทิศทาง)</h3>
+                    <h3 class="text-sm font-bold text-emerald-400 mb-2">📡 เรดาร์ฝนจริง (สังเกตการณ์ + คาดการณ์ระยะสั้น)</h3>
+                    <div id="radar-map" class="h-56 w-full rounded-xl border border-slate-600 shadow-inner"></div>
+                    <div class="flex items-center justify-between mt-2">
+                        <button id="radar-play-btn" onclick="toggleRadarPlay()" class="bg-blue-600 hover:bg-blue-500 text-white font-bold px-3 py-1.5 rounded-lg text-xs shadow-md transition">▶️ เล่น</button>
+                        <input id="radar-slider" type="range" min="0" max="1" value="0" oninput="seekRadar(this.value)" class="flex-1 mx-2 accent-emerald-500">
+                        <span id="radar-time-label" class="text-xs font-bold text-cyan-300 whitespace-nowrap">--:--</span>
+                    </div>
+                    <div id="radar-status" class="text-[10px] text-slate-400 text-center mt-1">กำลังโหลด...</div>
+                    <div id="radar-frame-count" class="text-[10px] text-slate-500 text-center"></div>
+                    <div class="text-[10px] text-slate-500 text-center mt-1">ข้อมูลเรดาร์จริงจาก RainViewer.com — เห็นกลุ่มฝนที่กำลังเกิดขึ้นจริง ไม่ใช่แบบจำลอง</div>
+                </div>
+
+                <!-- 🌐 แผนที่เมฆฝนจากโมเดลพยากรณ์ (ไม่ใช่เรดาร์จริง) -->
+                <div class="bg-slate-700/30 p-3 rounded-2xl border border-slate-600">
+                    <h3 class="text-sm font-bold text-indigo-300 mb-1">🌐 แผนที่เมฆฝนพยากรณ์ล่วงหน้า (โมเดล ECMWF)</h3>
+                    <p class="text-[10px] text-amber-300/90 mb-2">⚠️ นี่คือผลจากแบบจำลองคอมพิวเตอร์ ไม่ใช่เรดาร์จริง ความแม่นยำระดับชั่วโมงอาจคลาดเคลื่อนได้ โดยเฉพาะฝนฟ้าคะนองแบบพาความร้อนในเขตร้อนซึ่งก่อตัวเร็วและคาดเดายาก — ใช้เรดาร์จริงด้านบนประกอบการตัดสินใจเฉพาะหน้า</p>
                     <div class="radar-container border border-slate-600 shadow-inner">
                         <iframe src="https://embed.windy.com/embed.html?type=map&location=coordinates&metricRain=mm&metricTemp=%C2%B0C&metricWind=km%2Fh&zoom=11&overlay=rain&product=ecmwf&level=surface&lat=7.2336&lon=100.5361&detailLat=7.2336&detailLon=100.5361&marker=true" frameborder="0"></iframe>
                     </div>
@@ -233,6 +248,95 @@
                 leafletMap.dragging.enable();
                 document.getElementById('map-overlay').classList.add('hidden');
             }
+        }
+
+        // --- เรดาร์ฝนจริงจาก RainViewer (ข้อมูลสังเกตการณ์ ไม่ใช่โมเดล) ---
+        let radarMap = null, radarLayer = null, radarFrames = [], radarPastCount = 0;
+        let radarIndex = 0, radarHost = '', radarTimer = null, radarPlaying = false;
+
+        async function initRadar() {
+            clearInterval(radarTimer);
+            radarPlaying = false;
+            if (radarMap !== null) { radarMap.remove(); radarMap = null; }
+
+            radarMap = L.map('radar-map', { zoomControl: true, dragging: true, scrollWheelZoom: false }).setView([LAT, LON], 8);
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                maxZoom: 18, subdomains: 'abcd', attribution: '© CARTO, © OpenStreetMap'
+            }).addTo(radarMap);
+            L.circleMarker([LAT, LON], { radius: 6, color: '#f43f5e', weight: 2, fillColor: '#f43f5e', fillOpacity: 1 })
+                .addTo(radarMap).bindPopup('📍 สวนคุณพ่อ');
+
+            const statusEl = document.getElementById('radar-status');
+            statusEl.innerText = 'กำลังโหลดข้อมูลเรดาร์จริง...';
+
+            try {
+                const res = await fetch('https://api.rainviewer.com/public/weather-maps.json');
+                const data = await res.json();
+                radarHost = data.host;
+                const past = (data.radar && data.radar.past) || [];
+                const nowcast = (data.radar && data.radar.nowcast) || [];
+                radarFrames = [...past, ...nowcast];
+                radarPastCount = past.length;
+
+                if (radarFrames.length === 0) throw new Error('no frames');
+
+                radarIndex = radarPastCount > 0 ? radarPastCount - 1 : 0;
+                const slider = document.getElementById('radar-slider');
+                slider.max = radarFrames.length - 1;
+                slider.value = radarIndex;
+
+                renderRadarFrame();
+                document.getElementById('radar-frame-count').innerText =
+                    `${past.length} เฟรมย้อนหลัง (สังเกตการณ์จริง) + ${nowcast.length} เฟรมคาดการณ์ระยะสั้น (~10 นาที/เฟรม)`;
+                statusEl.innerText = '';
+                playRadar();
+            } catch (e) {
+                statusEl.innerText = '⚠️ โหลดเรดาร์ไม่สำเร็จ (เครือข่ายขัดข้องหรือ RainViewer ไม่ตอบสนอง)';
+            }
+        }
+
+        function renderRadarFrame() {
+            const frame = radarFrames[radarIndex];
+            if (!frame || !radarMap) return;
+            if (radarLayer) radarMap.removeLayer(radarLayer);
+            radarLayer = L.tileLayer(`${radarHost}${frame.path}/256/{z}/{x}/{y}/2/1_1.png`, { opacity: 0.75 }).addTo(radarMap);
+
+            const d = new Date(frame.time * 1000);
+            const timeStr = d.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+            const isForecast = radarIndex >= radarPastCount;
+            const label = document.getElementById('radar-time-label');
+            label.innerText = isForecast ? `⏩ คาดการณ์ ${timeStr} น.` : `🕐 จริง ${timeStr} น.`;
+            label.className = isForecast ? "text-xs font-bold text-amber-300 whitespace-nowrap" : "text-xs font-bold text-cyan-300 whitespace-nowrap";
+
+            const slider = document.getElementById('radar-slider');
+            if (slider) slider.value = radarIndex;
+        }
+
+        function playRadar() {
+            if (radarFrames.length <= 1) return;
+            radarPlaying = true;
+            document.getElementById('radar-play-btn').innerText = '⏸️ หยุด';
+            clearInterval(radarTimer);
+            radarTimer = setInterval(() => {
+                radarIndex = (radarIndex + 1) % radarFrames.length;
+                renderRadarFrame();
+            }, 600);
+        }
+
+        function pauseRadar() {
+            radarPlaying = false;
+            document.getElementById('radar-play-btn').innerText = '▶️ เล่น';
+            clearInterval(radarTimer);
+        }
+
+        function toggleRadarPlay() {
+            if (radarPlaying) pauseRadar(); else playRadar();
+        }
+
+        function seekRadar(val) {
+            pauseRadar();
+            radarIndex = parseInt(val, 10);
+            renderRadarFrame();
         }
 
         function getWeatherDescription(code, isNight) {
@@ -325,6 +429,20 @@
             document.getElementById('last-updated').innerText = diffMin < 1 ? "อัปเดตข้อมูลสภาพอากาศ: เมื่อสักครู่นี้" : `อัปเดตข้อมูลสภาพอากาศ: ${diffMin} นาทีที่แล้ว`;
         }
 
+        // แก้บั๊ก DataCloneError: AbortController.signal เป็นอ็อบเจกต์ที่ structured-clone ไม่ได้
+        // ใน sandbox บางแบบ (เช่นตัวพรีวิวไฟล์ในแชท) ทำให้ fetch พังทันทีก่อนยิง request จริง
+        // แก้โดยจับเวลาด้วย Promise.race แทนการส่ง signal เข้าไปใน fetch โดยตรง
+        function fetchWithTimeout(url, timeoutMs) {
+            const timeoutPromise = new Promise((_, reject) => {
+                setTimeout(() => {
+                    const err = new Error('Request timed out');
+                    err.name = 'AbortError';
+                    reject(err);
+                }, timeoutMs);
+            });
+            return Promise.race([fetch(url), timeoutPromise]);
+        }
+
         function getTodayIndex(dailyTimeArray) {
             const now = new Date();
             const year = now.getFullYear();
@@ -375,14 +493,10 @@
             document.getElementById('content').classList.add('hidden');
             document.getElementById('error-state').classList.add('hidden');
 
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 10000);
-
             try {
-                const url = `https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,wind_speed_10m,wind_direction_10m,weather_code&hourly=temperature_2m,precipitation_probability,uv_index&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,et0_fao_evapotranspiration,sunrise,sunset,uv_index_max&timezone=Asia%2FBangkok&forecast_days=3`;
+                const url = `https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,wind_speed_10m,wind_direction_10m,weather_code&hourly=temperature_2m,precipitation_probability,precipitation,weather_code,uv_index&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,et0_fao_evapotranspiration,sunrise,sunset,uv_index_max&timezone=Asia%2FBangkok&forecast_days=3&models=best_match`;
                 
-                const response = await fetch(url, { signal: controller.signal });
-                clearTimeout(timeoutId);
+                const response = await fetchWithTimeout(url, 10000);
                 if (!response.ok) throw new Error("API Error");
 
                 const data = await response.json();
@@ -426,8 +540,10 @@
                 }
 
                 const nowMs = now.getTime();
-                let currentHourIdx = hourly.time.findIndex(t => new Date(t).getTime() >= nowMs - 3600000);
-                if (currentHourIdx === -1) currentHourIdx = 0;
+                // แก้บั๊ก: เดิมใช้ findIndex(time >= now - 1hr) ซึ่งบางจังหวะจะชี้ไปที่ชั่วโมงที่ผ่านไปแล้ว
+                // ใหม่: คำนวณ index ตรงๆ จาก (index ของวันนี้ x 24) + ชั่วโมงปัจจุบัน เพราะ Open-Meteo คืนข้อมูลรายชั่วโมง 24 จุด/วัน เริ่มเที่ยงคืนเสมอ
+                let currentHourIdx = todayIdx * 24 + now.getHours();
+                if (currentHourIdx < 0 || currentHourIdx >= hourly.time.length) currentHourIdx = 0;
                 
                 const currentUV = isNight ? 0 : (hourly.uv_index[currentHourIdx] || 0);
                 document.getElementById('uv-index').innerText = currentUV.toFixed(1);
@@ -505,24 +621,25 @@
                 const hourlyContainer = document.getElementById('hourly-container');
                 hourlyContainer.innerHTML = '';
                 
-                let startIndex = hourly.time.findIndex(t => new Date(t).getTime() >= nowMs - 3600000);
-                if (startIndex === -1) startIndex = 0;
+                const startIndex = currentHourIdx;
 
                 for (let i = startIndex; i < Math.min(startIndex + 6, hourly.time.length); i++) {
                     const hourDate = new Date(hourly.time[i]);
                     const hourStr = hourDate.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
                     const tempVal = hourly.temperature_2m[i];
                     const popVal = hourly.precipitation_probability[i];
+                    const mmVal = hourly.precipitation[i];
 
                     let cardStyle = "bg-slate-700/60 border-slate-600";
                     if (popVal >= 70) cardStyle = "bg-blue-900/90 border-blue-400 ring-2 ring-blue-400";
                     else if (popVal >= 40) cardStyle = "bg-sky-900/70 border-sky-500";
 
                     hourlyContainer.innerHTML += `
-                        <div class="${cardStyle} min-w-[72px] p-2.5 rounded-xl border text-center flex-1 transition">
+                        <div class="${cardStyle} min-w-[76px] p-2.5 rounded-xl border text-center flex-1 transition">
                             <div class="text-xs text-slate-300 font-bold">${hourStr} น.</div>
                             <div class="text-sm font-extrabold text-amber-300 my-1">${tempVal}°C</div>
                             <div class="text-[11px] text-blue-200 font-bold">☔ ${popVal}%</div>
+                            <div class="text-[10px] text-slate-400 mt-0.5">${mmVal > 0 ? mmVal.toFixed(1) + ' มม.' : '-'}</div>
                         </div>
                     `;
                 }
@@ -551,7 +668,7 @@
                 document.getElementById('loading').classList.add('hidden');
                 document.getElementById('content').classList.remove('hidden');
 
-                setTimeout(() => { initMap(); }, 100);
+                setTimeout(() => { initMap(); initRadar(); }, 100);
                 startTimer();
 
             } catch (error) {
@@ -560,7 +677,10 @@
                 if (error.name === 'AbortError') {
                     document.getElementById('error-msg').innerText = "การเชื่อมต่อใช้เวลานานเกินไป (Timeout 10s) กรุณาลองใหม่อีกครั้ง";
                 } else {
-                    document.getElementById('error-msg').innerText = "ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์สภาพอากาศได้ กรุณาตรวจสอบอินเทอร์เน็ต";
+                    // แสดงรายละเอียด error จริงเพื่อช่วยวินิจฉัย (เช่น CORS, TypeError: Failed to fetch, DNS)
+                    document.getElementById('error-msg').innerText =
+                        `ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์สภาพอากาศได้ กรุณาตรวจสอบอินเทอร์เน็ต\n[รายละเอียด: ${error.name || 'Error'}: ${error.message || error}]`;
+                    console.error('fetchWeather failed:', error);
                 }
             }
         }
