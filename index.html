@@ -1,3 +1,21 @@
+จากตัวโค้ดล่าสุด ผมลองไล่ตรวจสอบเชิงลึก (Static Code Analysis) แล้วเจอ จุดที่ยังเปราะบางและอาจเกิด Bug หน้างานได้อีก 4 จุดสำคัญ ครับ:
+1. บั๊กเวลาฝนตกพรุ่งนี้เพี้ยน (Timezone ISO Cutoff Bug)
+ * สาเหตุ: ฟังก์ชัน getTomorrowRainTimeSummary ใช้คำสั่ง tomorrow.toISOString().split('T')[0]
+ * ผลกระทบ: คำสั่ง .toISOString() จะแปลงเวลาในมือถือเป็นเวลาสากล (UTC/GMT+0) ซึ่งช้ากว่าประเทศไทย 7 ชั่วโมง หากคุณพ่อเปิดดูแอปหลัง 19:00 น. เป็นต้นไป วันที่ในระบบจะกลายเป็นวันถัดไปทันที ทำให้ดึงข้อมูลรายชั่วโมงผิดวัน และสรุปช่วงเวลาฝนพรุ่งนี้เพี้ยน
+ * การแก้ไข: เปลี่ยนไปใช้การสร้าง String วันที่โดยอิงตามเวลาไทย (Local Date String)
+2. บั๊ก Array ล้นขอบเขตตอนดึงข้อมูลวัน (Array Out-of-Bounds Error)
+ * สาเหตุ: ในส่วนคำแนะนำรดน้ำ มีการดึง daily.precipitation_probability_max[todayIdx + 1]
+ * ผลกระทบ: API ถูกตั้งค่าให้ดึงพยากรณ์ล่วงหน้า 3 วัน (forecast_days=3) หากระบบหา todayIdx ได้เป็น Index ที่ 2 (เช่น เปิดดูตอนรอยต่อวัน) การบวก index เพิ่มไปอีก 1 (todayIdx + 1 = 3) จะเกินขนาดของ Array ทำให้ได้ค่า undefined ส่งผลให้คำแนะนำรดน้ำแสดงผลเป็น NaN% หรือบั๊กไม่ทำงาน
+ * การแก้ไข: เพิ่มเงื่อนไขตรวจสอบ Bounds ของ Array ก่อนดึงข้อมูลเสมอ
+3. บั๊ก UV Index ตอนกลางคืนช่วงหลังเที่ยงคืน (Midnight UV Bug)
+ * สาเหตุ: การเช็คว่ากลางคืนหรือไม่ ใช้เงื่อนไข now < sunriseDate || now > sunsetDate
+ * ผลกระทบ: ช่วงเวลา 00:00 น. ถึง 06:10 น. (เช้าตรู่) ค่า sunriseDate และ sunsetDate ที่ได้จาก Index วันปัจจุบันยังคงอิงเวลาของวันนั้นอยู่ ทำให้การเปรียบเทียบค่า Date Object ช่วงข้ามคืนคลาดเคลื่อน และอาจดึง UV กลางวันมาโชว์ในตอนดึกได้
+ * การแก้ไข: เปรียบเทียบโดยแปลงเวลาเป็นชั่วโมงและนาที (Minutes from midnight) แทนการใช้ Date Object ตรงๆ
+4. บั๊ก Map ไม่รีไซเคิลเมื่อกดรีเฟรช (Leaflet Container Already Initialized Error)
+ * สาเหตุ: เมื่อกดปุ่ม "🔄 อัปเดตข้อมูลเดี๋ยวนี้" ตัวแอปจะเรียกฟังก์ชัน initMap() ซ้ำ
+ * ผลกระทบ: Leaflet JS จะพ่น Error ลง Console ว่า Map container is already initialized แม้หน้าเว็บจะไม่ค้าง แต่อาจทำให้การวาดกรอบสวน (Polygon) ไม่แสดงผลในการกดรีเฟรชครั้งถัดไป
+ * การแก้ไข: ทำการสั่ง map.remove() เคลียร์อินสแตนซ์เดิมออกก่อนสร้างแผนที่ใหม่
+💻 โค้ดฉบับอุดรอยรั่วทั้ง 4 จุด (ก๊อปปี้ไปวางทับใน index.html บน GitHub ได้เลยครับ)
 <!DOCTYPE html>
 <html lang="th">
 <head>
@@ -38,6 +56,12 @@
 
         <div class="p-4 space-y-4">
             
+            <!-- 📅 การ์ดแสดงวัน วันที่ และเวลาปัจจุบัน -->
+            <div class="bg-slate-700/80 p-3.5 rounded-2xl border border-slate-600 text-center shadow-md">
+                <div id="current-date" class="text-sm font-bold text-emerald-400">กำลังโหลดวันที่...</div>
+                <div id="current-clock" class="text-3xl font-extrabold text-slate-100 tracking-wider my-0.5">--:--:--</div>
+            </div>
+
             <!-- Loading State -->
             <div id="loading" class="text-center py-12 text-slate-400 font-bold text-lg animate-pulse">
                 ⏳ กำลังโหลดและวิเคราะห์ข้อมูล...
@@ -189,12 +213,37 @@
 
         let leafletMap = null;
 
+        function updateClock() {
+            const now = new Date();
+            const days = ["อาทิตย์", "จันทร์", "อังคาร", "พุธ", "พฤหัสบดี", "ศุกร์", "เสาร์"];
+            const months = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
+            
+            const dayName = days[now.getDay()];
+            const dateNum = now.getDate();
+            const monthName = months[now.getMonth()];
+            const yearTH = now.getFullYear() + 543;
+            
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            const seconds = String(now.getSeconds()).padStart(2, '0');
+
+            document.getElementById('current-date').innerText = `วัน${dayName}ที่ ${dateNum} ${monthName} ${yearTH}`;
+            document.getElementById('current-clock').innerText = `${hours}:${minutes}:${seconds} น.`;
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        // --- แก้บั๊ก Leaflet Map Re-initialization ---
         function initMap() {
-            if (leafletMap) return;
+            if (leafletMap !== null) {
+                leafletMap.remove();
+                leafletMap = null;
+            }
             leafletMap = L.map('farm-map', { zoomControl: false, dragging: false, scrollWheelZoom: false });
             L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', { maxZoom: 20, attribution: '© Google' }).addTo(leafletMap);
             const polygon = L.polygon(farmBoundary, { color: '#10b981', weight: 3, fillColor: '#10b981', fillOpacity: 0.2 }).addTo(leafletMap);
             leafletMap.fitBounds(polygon.getBounds());
+            document.getElementById('map-overlay').classList.remove('hidden');
         }
 
         function unlockMap() {
@@ -204,9 +253,12 @@
             }
         }
 
-        function getWeatherDescription(code) {
+        function getWeatherDescription(code, isNight) {
             const codes = {
-                0: "แดดจัด ☀️", 1: "มีเมฆบางส่วน 🌤️", 2: "มีเมฆเป็นบางส่วน ⛅", 3: "เมฆเต็มท้องฟ้า ☁️",
+                0: isNight ? "ท้องฟ้าโปร่ง/ไร้เมฆ 🌙" : "แดดจัด ☀️", 
+                1: isNight ? "แจ่มใส มีเมฆบางส่วน 🌙" : "มีเมฆบางส่วน 🌤️", 
+                2: "มีเมฆเป็นบางส่วน ⛅", 
+                3: "เมฆเต็มท้องฟ้า ☁️",
                 45: "มีหมอกลง 🌫️", 48: "หมอกหนา 🌫️", 51: "ฝนละอองเบาบาง 🌦️", 53: "ฝนตกปรอยๆ 🌦️",
                 55: "ฝนละอองหนาแน่น 🌧️", 61: "ฝนตกเล็กน้อย 🌧️", 63: "ฝนตกปานกลาง 🌧️", 65: "ฝนตกหนัก 🌧️⚡",
                 80: "ฝนซาเบาบาง 🌦️", 81: "ฝนซาปานกลาง 🌧️", 82: "ฝนซาหนักมาก 🌧️⚡", 95: "พายุฝนฟ้าคะนอง ⛈️", 
@@ -288,13 +340,52 @@
         function updateRelativeTime() {
             if (!lastFetchTime) return;
             const diffMin = Math.floor((new Date() - lastFetchTime) / 60000);
-            document.getElementById('last-updated').innerText = diffMin < 1 ? "อัปเดตล่าสุด: เมื่อสักครู่นี้" : `อัปเดตล่าสุด: ${diffMin} นาทีที่แล้ว`;
+            document.getElementById('last-updated').innerText = diffMin < 1 ? "อัปเดตข้อมูลสภาพอากาศ: เมื่อสักครู่นี้" : `อัปเดตข้อมูลสภาพอากาศ: ${diffMin} นาทีที่แล้ว`;
         }
 
         function getTodayIndex(dailyTimeArray) {
-            const todayStr = new Date().toISOString().split('T')[0];
-            const index = dailyTimeArray.findIndex(d => d.startsWith(todayStr));
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const day = String(now.getDate()).padStart(2, '0');
+            const todayLocalStr = `${year}-${month}-${day}`;
+            
+            const index = dailyTimeArray.findIndex(d => d.startsWith(todayLocalStr));
             return index !== -1 ? index : 0;
+        }
+
+        // --- แก้บั๊ก Timezone ISO Cutoff ของพรุ่งนี้ ---
+        function getTomorrowRainTimeSummary(hourlyData) {
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            
+            const year = tomorrow.getFullYear();
+            const month = String(tomorrow.getMonth() + 1).padStart(2, '0');
+            const day = String(tomorrow.getDate()).padStart(2, '0');
+            const tomorrowLocalStr = `${year}-${month}-${day}`;
+
+            let morningProb = 0;   // 06:00 - 12:00
+            let afternoonProb = 0; // 12:00 - 18:00
+            let eveningProb = 0;   // 18:00 - 24:00
+
+            for (let i = 0; i < hourlyData.time.length; i++) {
+                if (hourlyData.time[i].startsWith(tomorrowLocalStr)) {
+                    const hour = new Date(hourlyData.time[i]).getHours();
+                    const prob = hourlyData.precipitation_probability[i];
+
+                    if (hour >= 6 && hour < 12) morningProb = Math.max(morningProb, prob);
+                    else if (hour >= 12 && hour < 18) afternoonProb = Math.max(afternoonProb, prob);
+                    else if (hour >= 18) eveningProb = Math.max(eveningProb, prob);
+                }
+            }
+
+            const times = [];
+            if (morningProb >= 50) times.push("ช่วงเช้า");
+            if (afternoonProb >= 50) times.push("ช่วงบ่าย");
+            if (eveningProb >= 50) times.push("ช่วงค่ำ/ดึก");
+
+            if (times.length > 0) return `พรุ่งนี้มีโอกาสฝนตก${times.join('และ')}`;
+            return "พรุ่งนี้ฝนตกบางพื้นที่";
         }
 
         async function fetchWeather() {
@@ -306,7 +397,6 @@
             const timeoutId = setTimeout(() => controller.abort(), 10000);
 
             try {
-                // แก้ไข URL ให้ถูกต้อง ป้องกัน API Bad Request Error
                 const url = `https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,wind_speed_10m,wind_direction_10m,weather_code&hourly=temperature_2m,precipitation_probability,uv_index&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,et0_fao_evapotranspiration,sunrise,sunset,uv_index_max&timezone=Asia%2FBangkok&forecast_days=3`;
                 
                 const response = await fetch(url, { signal: controller.signal });
@@ -321,9 +411,20 @@
                 const todayIdx = getTodayIndex(daily.time);
                 lastFetchTime = new Date();
 
+                // --- แก้บั๊ก UV Index & กลางคืน รอยต่อเที่ยงคืน ---
+                const now = new Date();
+                const nowMinutes = now.getHours() * 60 + now.getMinutes();
+
+                const sunriseDate = new Date(daily.sunrise[todayIdx]);
+                const sunsetDate = new Date(daily.sunset[todayIdx]);
+                const sunriseMinutes = sunriseDate.getHours() * 60 + sunriseDate.getMinutes();
+                const sunsetMinutes = sunsetDate.getHours() * 60 + sunsetDate.getMinutes();
+
+                const isNight = nowMinutes < sunriseMinutes || nowMinutes > sunsetMinutes;
+
                 document.getElementById('temp').innerText = `${current.temperature_2m}°C`;
                 document.getElementById('apparent-temp').innerText = `${current.apparent_temperature}°C`;
-                document.getElementById('weather-desc').innerText = getWeatherDescription(current.weather_code);
+                document.getElementById('weather-desc').innerText = getWeatherDescription(current.weather_code, isNight);
                 document.getElementById('wind').innerText = `${current.wind_speed_10m} กม./ชม.`;
                 document.getElementById('wind-feel').innerText = getWindFeel(current.wind_speed_10m);
                 document.getElementById('wind-direction-container').style.transform = `rotate(${current.wind_direction_10m}deg)`;
@@ -342,22 +443,30 @@
                     fungusBox.innerText = "✅ อากาศแห้ง ปลอดภัย";
                 }
 
-                const uvVal = daily.uv_index_max[todayIdx];
-                document.getElementById('uv-index').innerText = uvVal;
+                const nowMs = now.getTime();
+                let currentHourIdx = hourly.time.findIndex(t => new Date(t).getTime() >= nowMs - 3600000);
+                if (currentHourIdx === -1) currentHourIdx = 0;
+                
+                const currentUV = isNight ? 0 : (hourly.uv_index[currentHourIdx] || 0);
+                document.getElementById('uv-index').innerText = currentUV.toFixed(1);
+                
                 const uvAdvice = document.getElementById('uv-advice');
-                if (uvVal >= 8) {
+                if (isNight) {
+                    uvAdvice.innerText = "🌙 กลางคืน ปลอดภัยจาก UV";
+                    uvAdvice.className = "text-[10px] font-bold text-slate-400";
+                } else if (currentUV >= 8) {
                     uvAdvice.innerText = "🚨 แดดจัด ควรหลบแดด";
                     uvAdvice.className = "text-[10px] font-bold text-rose-300";
-                } else if (uvVal >= 6) {
-                    uvAdvice.innerText = "☀️ แดดแรง หมวกต้องพร้อม";
+                } else if (currentUV >= 5) {
+                    uvAdvice.innerText = "☀️ แดดปานกลาง ควรใส่หมวก";
                     uvAdvice.className = "text-[10px] font-bold text-amber-300";
                 } else {
-                    uvAdvice.innerText = "🌤️ แดดกำลังดี";
+                    uvAdvice.innerText = "🌤️ แดดอ่อนๆ ปลอดภัย";
                     uvAdvice.className = "text-[10px] font-bold text-emerald-300";
                 }
 
-                const sunriseTime = new Date(daily.sunrise[todayIdx]).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
-                const sunsetTime = new Date(daily.sunset[todayIdx]).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+                const sunriseTime = sunriseDate.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+                const sunsetTime = sunsetDate.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
                 document.getElementById('sunrise').innerText = sunriseTime;
                 document.getElementById('sunset').innerText = sunsetTime;
 
@@ -381,10 +490,14 @@
 
                 const et0Today = daily.et0_fao_evapotranspiration[todayIdx];
                 const rainSumToday = daily.precipitation_sum[todayIdx];
-                const tomorrowRainProb = daily.precipitation_probability_max[todayIdx + 1];
+                
+                // --- แก้บั๊ก Array Out of Bounds ---
+                const nextDayIdx = Math.min(todayIdx + 1, daily.precipitation_probability_max.length - 1);
+                const tomorrowRainProb = daily.precipitation_probability_max[nextDayIdx] || 0;
+                const tomorrowRainTimeText = getTomorrowRainTimeSummary(hourly);
                 
                 let savedDeficit = parseFloat(localStorage.getItem('water_deficit') || "0");
-                const todayDateStr = new Date().toDateString();
+                const todayDateStr = now.toDateString();
                 const lastSavedDate = localStorage.getItem('last_calc_date');
                 
                 if (lastSavedDate !== todayDateStr) {
@@ -401,7 +514,7 @@
                     waterGuide.innerHTML = `🔴 วันนี้ไม่ต้องรดน้ำ<br><span class="text-sm font-medium text-rose-300">(ความชื้นในดินเพียงพอแล้ว พักได้เลย)</span>`;
                 } else if (tomorrowRainProb > 60) {
                     waterGuide.className = "p-4 rounded-2xl border shadow-md font-bold text-center bg-amber-950/80 border-amber-600 text-amber-200";
-                    waterGuide.innerHTML = `🟡 รดน้ำแค่ครึ่งเดียวพอ<br><span class="text-sm font-medium text-amber-300">(พรุ่งนี้โอกาสฝนตก ${tomorrowRainProb}% รดผ่านๆ พอชุ่มหน้าดิน)</span>`;
+                    waterGuide.innerHTML = `🟡 รดน้ำแค่ครึ่งเดียวพอ<br><span class="text-sm font-medium text-amber-300">(${tomorrowRainTimeText} โอกาสฝน ${tomorrowRainProb}%)</span>`;
                 } else {
                     waterGuide.className = "p-4 rounded-2xl border shadow-md font-bold text-center bg-emerald-950/80 border-emerald-600 text-emerald-200";
                     waterGuide.innerHTML = `🟢 วันนี้ต้องรดน้ำ<br><span class="text-sm font-medium text-emerald-300">(แนะนำลากสายยางรดช่วงเช้า หรือรดเย็นก่อน ${sunsetTime} น.)</span>`;
@@ -410,7 +523,6 @@
                 const hourlyContainer = document.getElementById('hourly-container');
                 hourlyContainer.innerHTML = '';
                 
-                const nowMs = new Date().getTime();
                 let startIndex = hourly.time.findIndex(t => new Date(t).getTime() >= nowMs - 3600000);
                 if (startIndex === -1) startIndex = 0;
 
@@ -484,3 +596,4 @@
     </script>
 </body>
 </html>
+
