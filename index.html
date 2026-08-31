@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>พยากรณ์อากาศและบริหารสวนคุณพ่อ - ต.สทิงหม้อ</title>
+    <title>บริหารสวนคุณพ่อ - ต.สทิงหม้อ</title>
 
     <!-- PWA Config -->
     <link rel="manifest" href="data:application/manifest+json,{%22name%22:%22สวนคุณพ่อ%20Smart%20Farm%22,%22short_name%22:%22สวนคุณพ่อ%22,%22start_url%22:%22.%22,%22display%22:%22standalone%22,%22background_color%22:%22#0f172a%22,%22theme_color%22:%22#047857%22}">
@@ -18,13 +18,11 @@
     
     <style> 
         body { font-family: 'Sarabun', sans-serif; } 
-        .radar-container { position: relative; width: 100%; padding-bottom: 75%; height: 0; overflow: hidden; border-radius: 1rem; }
-        .radar-container iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
-        #farm-map { z-index: 10; }
+        #farm-map { z-index: 10; height: 320px; }
         #compass-dial { transition: transform 0.1s ease-out; }
     </style>
 </head>
-<body class="bg-slate-900 text-slate-100 min-h-screen p-3 md:p-6">
+<body class="bg-slate-900 text-slate-100 min-h-screen p-3 md:p-6 pb-20">
     <div class="max-w-md mx-auto bg-slate-800 rounded-3xl shadow-2xl overflow-hidden border border-slate-700">
         
         <!-- Header -->
@@ -38,77 +36,83 @@
 
         <div class="p-4 space-y-4">
             
-            <!-- 📅 การ์ดแสดงวัน วันที่ และเวลาปัจจุบัน -->
-            <div class="bg-slate-700/80 p-3.5 rounded-2xl border border-slate-600 text-center shadow-md">
-                <div id="current-date" class="text-sm font-bold text-emerald-400">กำลังโหลดวันที่...</div>
-                <div id="current-clock" class="text-3xl font-extrabold text-slate-100 tracking-wider my-0.5">--:--:--</div>
+            <!-- 📅 วันที่และเวลาปัจจุบัน -->
+            <div class="bg-slate-700/80 p-3 rounded-2xl border border-slate-600 text-center shadow-md">
+                <div id="current-date" class="text-sm font-bold text-emerald-400">กำลังโหลด...</div>
+                <div id="current-clock" class="text-2xl font-extrabold text-slate-100 tracking-wider">--:--:--</div>
             </div>
 
-            <!-- Loading State -->
+            <!-- Loading & Error States -->
             <div id="loading" class="text-center py-12 text-slate-400 font-bold text-lg animate-pulse">
-                ⏳ กำลังโหลดและวิเคราะห์ข้อมูล...
+                ⏳ กำลังวิเคราะห์สภาพอากาศหน้างาน...
             </div>
-
-            <!-- Error State -->
             <div id="error-state" class="hidden bg-rose-950/80 border border-rose-600 p-5 rounded-2xl text-center space-y-3">
                 <div class="text-3xl">⚠️</div>
                 <div class="font-bold text-rose-200 text-lg">การเชื่อมต่อขัดข้อง</div>
-                <p id="error-msg" class="text-xs text-rose-300 leading-relaxed">ไม่สามารถดึงข้อมูลสภาพอากาศได้ กรุณาตรวจสอบอินเทอร์เน็ต</p>
+                <p id="error-msg" class="text-xs text-rose-300 leading-relaxed">กรุณาตรวจสอบอินเทอร์เน็ต</p>
                 <button onclick="fetchWeather()" class="bg-rose-600 hover:bg-rose-500 text-white font-bold px-6 py-2 rounded-xl text-sm transition">
                     🔄 ลองใหม่อีกครั้ง
                 </button>
             </div>
 
-            <!-- Main Content -->
             <div id="content" class="hidden space-y-4">
                 
-                <!-- 🚨 ป้ายเตือนสถานะฝนตกเรียลไทม์ -->
-                <div id="live-rain-alert"></div>
+                <!-- 🚜 ป้ายความพร้อมลุยงาน (Workability Banner) -->
+                <div id="workability-banner" class="p-4 rounded-2xl shadow-lg text-center border">
+                    <!-- จะถูกเติมด้วย JS -->
+                </div>
                 
-                <!-- Main Status & พระอาทิตย์ขึ้น-ตก -->
+                <!-- สภาพอากาศสด & รู้สึกจริง -->
                 <div class="bg-slate-700/50 p-4 rounded-2xl border border-slate-600 text-center shadow-md">
                     <div class="flex items-center justify-center gap-2">
                         <div id="temp" class="text-5xl font-extrabold text-amber-400">--°C</div>
                     </div>
                     <div class="text-xs text-slate-400 mt-1">รู้สึกจริงเหมือน: <span id="apparent-temp" class="text-amber-300 font-bold">--°C</span></div>
-                    <div id="weather-desc" class="text-slate-300 font-semibold text-lg mt-1">--</div>
+                    <div id="weather-desc" class="text-slate-200 font-bold text-lg mt-1">--</div>
                     
                     <div class="grid grid-cols-2 gap-4 mt-3 pt-3 border-t border-slate-600 text-sm">
                         <div class="flex flex-col items-center justify-center">
                             <span class="text-xl">🌅</span>
-                            <span class="text-slate-400 text-xs mt-1">ขึ้น: <span id="sunrise" class="font-bold text-emerald-300">--:--</span> น.</span>
+                            <span class="text-slate-400 text-xs mt-1">ขึ้น: <span id="sunrise" class="font-bold text-emerald-300">--:--</span></span>
                         </div>
                         <div class="flex flex-col items-center justify-center border-l border-slate-600">
                             <span class="text-xl">🌇</span>
-                            <span class="text-slate-400 text-xs mt-1">ตก: <span id="sunset" class="font-bold text-amber-300">--:--</span> น.</span>
+                            <span class="text-slate-400 text-xs mt-1">ตก: <span id="sunset" class="font-bold text-amber-300">--:--</span></span>
                         </div>
                     </div>
                 </div>
 
-                <!-- 📊 ตัวเลขดัชนีเกษตร -->
+                <!-- 📊 ตัวเลขดัชนี (UV / ความชื้น) -->
                 <div class="grid grid-cols-2 gap-3">
-                    <div class="bg-slate-700/40 p-3 rounded-2xl border border-slate-600 text-center">
-                        <div class="text-xs text-slate-400 font-bold">💧 ความชื้นสัมพัทธ์</div>
-                        <div id="humidity" class="text-xl font-extrabold text-cyan-300 my-1">--%</div>
-                        <div id="fungus-risk" class="text-[10px] font-bold px-1.5 py-0.5 rounded-full inline-block">--</div>
-                    </div>
-                    <div class="bg-slate-700/40 p-3 rounded-2xl border border-slate-600 text-center">
-                        <div class="text-xs text-slate-400 font-bold">☀️ ดัชนีความแรง UV</div>
+                    <div class="bg-slate-700/40 p-3 rounded-2xl border border-slate-600 text-center flex flex-col justify-between">
+                        <div class="text-xs text-slate-400 font-bold">☀️ ความแรงแดด (UV)</div>
                         <div id="uv-index" class="text-xl font-extrabold text-amber-400 my-1">--</div>
-                        <div id="uv-advice" class="text-[10px] font-bold text-slate-300">--</div>
+                        <div id="uv-advice" class="text-[10px] font-bold">--</div>
+                    </div>
+                    <div class="bg-slate-700/40 p-3 rounded-2xl border border-slate-600 text-center flex flex-col justify-between">
+                        <div class="text-xs text-slate-400 font-bold">💧 ความชื้นอากาศ</div>
+                        <div id="humidity" class="text-xl font-extrabold text-cyan-300 my-1">--%</div>
+                        <div class="text-[10px] text-slate-400">ฝนวันนี้: <span id="rain-sum" class="font-bold text-blue-300">--</span> มม.</div>
+                    </div>
+                </div>
+
+                <!-- ⏱️ ตารางไกด์ช่วงเวลาทำงานวันนี้ -->
+                <div class="bg-slate-700/30 p-4 rounded-2xl border border-slate-600">
+                    <h3 class="text-sm font-bold text-emerald-400 mb-3">📋 ไกด์ช่วงเวลาลุยงาน (วันนี้)</h3>
+                    <div class="space-y-2" id="daily-work-windows">
+                        <!-- เติมโดย JS -->
                     </div>
                 </div>
 
                 <!-- 🧭 เข็มทิศ & ความเร็วลม -->
                 <div class="bg-indigo-950/40 p-4 rounded-2xl border border-indigo-800/50 text-center">
-                    <h3 class="text-sm font-bold text-indigo-300 mb-2">🧭 ทิศทางและสภาพลม</h3>
                     <div class="text-xs mb-3 space-y-1">
-                        <div>ความเร็วลม: <span id="wind" class="text-amber-300 font-bold">--</span></div>
+                        <div>ทิศทางลม: <span id="wind" class="text-amber-300 font-bold">--</span></div>
                         <div id="wind-feel" class="text-emerald-300 font-bold">--</div>
                     </div>
                     
                     <button id="compass-btn" onclick="toggleCompass()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2.5 rounded-xl text-sm shadow-md transition">
-                        🧭 เปิดเข็มทิศหมุนตามมือถือ
+                        🧭 เปิดเข็มทิศหมุนตามมือถือ (ดูทิศลม)
                     </button>
                     
                     <div id="compass-ui" class="hidden flex-col items-center mt-3">
@@ -128,55 +132,34 @@
                     </div>
                 </div>
 
-                <!-- 💧 คำแนะนำการรดน้ำ -->
-                <div id="water-guide" class="p-4 rounded-2xl border shadow-md font-bold text-center text-lg leading-relaxed">
-                    <!-- เติมโดย JS -->
-                </div>
-
-                <!-- 🗺️ แผนที่ขอบเขตแปลงสวนจริง -->
+                <!-- 🗺️ แผนที่รวม: ขอบเขตสวน + เรดาร์ฝนจริง -->
                 <div class="bg-slate-700/30 p-3 rounded-2xl border border-slate-600 relative">
-                    <h3 class="text-sm font-bold text-emerald-400 mb-2">📍 ขอบเขตแปลงสวน (ดาวเทียม)</h3>
-                    <div id="map-overlay" class="absolute inset-x-3 bottom-3 top-9 bg-slate-900/60 backdrop-blur-sm z-20 rounded-xl flex items-center justify-center">
-                        <button onclick="unlockMap()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-2 rounded-xl text-xs shadow-lg">
-                            🖐️ แตะเพื่อเปิดการเลื่อนแผนที่
+                    <h3 class="text-sm font-bold text-blue-300 mb-2">📡 แผนที่สวน & เรดาร์กลุ่มฝนจริง</h3>
+                    <p class="text-[10px] text-slate-400 mb-2">เช็คกลุ่มเมฆฝนที่กำลังเกิดจริง เพื่อประเมินเวลาทำงาน</p>
+                    
+                    <div id="map-overlay" class="absolute inset-x-3 bottom-14 top-16 bg-slate-900/60 backdrop-blur-sm z-20 rounded-xl flex items-center justify-center">
+                        <button onclick="unlockMap()" class="bg-blue-600 hover:bg-blue-500 text-white font-bold px-4 py-2 rounded-xl text-sm shadow-lg">
+                            🖐️ แตะเพื่อเปิดดูแผนที่
                         </button>
                     </div>
-                    <div id="farm-map" class="h-48 w-full rounded-xl border border-slate-600 shadow-inner"></div>
-                </div>
-
-                <!-- 📡 เรดาร์ฝนจริง (ข้อมูลสังเกตการณ์จริง ไม่ใช่โมเดลพยากรณ์) -->
-                <div class="bg-slate-700/30 p-3 rounded-2xl border border-slate-600">
-                    <h3 class="text-sm font-bold text-emerald-400 mb-2">📡 เรดาร์ฝนจริง (สังเกตการณ์ + คาดการณ์ระยะสั้น)</h3>
-                    <div id="radar-map" class="h-56 w-full rounded-xl border border-slate-600 shadow-inner"></div>
-                    <div class="flex items-center justify-between mt-2">
-                        <button id="radar-play-btn" onclick="toggleRadarPlay()" class="bg-blue-600 hover:bg-blue-500 text-white font-bold px-3 py-1.5 rounded-lg text-xs shadow-md transition">▶️ เล่น</button>
-                        <input id="radar-slider" type="range" min="0" max="1" value="0" oninput="seekRadar(this.value)" class="flex-1 mx-2 accent-emerald-500">
-                        <span id="radar-time-label" class="text-xs font-bold text-cyan-300 whitespace-nowrap">--:--</span>
-                    </div>
-                    <div id="radar-status" class="text-[10px] text-slate-400 text-center mt-1">กำลังโหลด...</div>
-                    <div id="radar-frame-count" class="text-[10px] text-slate-500 text-center"></div>
-                    <div class="text-[10px] text-slate-500 text-center mt-1">ข้อมูลเรดาร์จริงจาก RainViewer.com — เห็นกลุ่มฝนที่กำลังเกิดขึ้นจริง ไม่ใช่แบบจำลอง</div>
-                </div>
-
-                <!-- 🌐 แผนที่เมฆฝนจากโมเดลพยากรณ์ (ไม่ใช่เรดาร์จริง) -->
-                <div class="bg-slate-700/30 p-3 rounded-2xl border border-slate-600">
-                    <h3 class="text-sm font-bold text-indigo-300 mb-1">🌐 แผนที่เมฆฝนพยากรณ์ล่วงหน้า (โมเดล ECMWF)</h3>
-                    <p class="text-[10px] text-amber-300/90 mb-2">⚠️ นี่คือผลจากแบบจำลองคอมพิวเตอร์ ไม่ใช่เรดาร์จริง ความแม่นยำระดับชั่วโมงอาจคลาดเคลื่อนได้ โดยเฉพาะฝนฟ้าคะนองแบบพาความร้อนในเขตร้อนซึ่งก่อตัวเร็วและคาดเดายาก — ใช้เรดาร์จริงด้านบนประกอบการตัดสินใจเฉพาะหน้า</p>
-                    <div class="radar-container border border-slate-600 shadow-inner">
-                        <iframe src="https://embed.windy.com/embed.html?type=map&location=coordinates&metricRain=mm&metricTemp=%C2%B0C&metricWind=km%2Fh&zoom=11&overlay=rain&product=ecmwf&level=surface&lat=7.2336&lon=100.5361&detailLat=7.2336&detailLon=100.5361&marker=true" frameborder="0"></iframe>
+                    
+                    <div id="farm-map" class="w-full rounded-xl border border-slate-600 shadow-inner"></div>
+                    
+                    <!-- ส่วนควบคุมเรดาร์ฝน -->
+                    <div id="radar-controls" class="hidden mt-3 flex-col gap-2">
+                        <div class="flex items-center justify-between">
+                            <button id="radar-play-btn" onclick="toggleRadarPlay()" class="bg-slate-600 hover:bg-slate-500 text-white font-bold px-4 py-2 rounded-lg text-xs shadow-md transition w-20">▶️ เล่น</button>
+                            <input id="radar-slider" type="range" min="0" max="1" value="0" oninput="seekRadar(this.value)" class="flex-1 mx-3 accent-blue-400">
+                            <span id="radar-time-label" class="text-xs font-bold text-cyan-300 whitespace-nowrap w-24 text-right">--:--</span>
+                        </div>
+                        <div id="radar-status" class="text-[10px] text-slate-400 text-center"></div>
                     </div>
                 </div>
 
                 <!-- ⏱️ คาดการณ์ฝนรายชั่วโมง -->
                 <div>
-                    <h3 class="text-sm font-bold text-slate-300 mb-2">⏱️ คาดการณ์ฝน (6 ชม. ข้างหน้า)</h3>
+                    <h3 class="text-sm font-bold text-slate-300 mb-2">⏱️ พยากรณ์ฝน (6 ชม. ข้างหน้า)</h3>
                     <div id="hourly-container" class="flex gap-2 overflow-x-auto pb-2"></div>
-                </div>
-
-                <!-- 📅 พยากรณ์ล่วงหน้า 2 วัน -->
-                <div>
-                    <h3 class="text-sm font-bold text-slate-300 mb-2">📅 วางแผนล่วงหน้า</h3>
-                    <div id="daily-forecast-container" class="grid grid-cols-2 gap-3"></div>
                 </div>
 
                 <div class="text-center text-xs text-slate-500 mt-2">
@@ -190,6 +173,7 @@
         </div>
     </div>
 
+    <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
     <script>
@@ -210,65 +194,46 @@
 
         let leafletMap = null;
 
+        // --- ระบบเวลา ---
         function updateClock() {
             const now = new Date();
             const days = ["อาทิตย์", "จันทร์", "อังคาร", "พุธ", "พฤหัสบดี", "ศุกร์", "เสาร์"];
             const months = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
-            
-            const dayName = days[now.getDay()];
-            const dateNum = now.getDate();
-            const monthName = months[now.getMonth()];
-            const yearTH = now.getFullYear() + 543;
-            
             const hours = String(now.getHours()).padStart(2, '0');
             const minutes = String(now.getMinutes()).padStart(2, '0');
             const seconds = String(now.getSeconds()).padStart(2, '0');
 
-            document.getElementById('current-date').innerText = `วัน${dayName}ที่ ${dateNum} ${monthName} ${yearTH}`;
+            document.getElementById('current-date').innerText = `วัน${days[now.getDay()]}ที่ ${now.getDate()} ${months[now.getMonth()]} ${now.getFullYear() + 543}`;
             document.getElementById('current-clock').innerText = `${hours}:${minutes}:${seconds} น.`;
         }
         setInterval(updateClock, 1000);
         updateClock();
 
-        // --- แก้บั๊ก Leaflet Map Re-initialization ---
-        function initMap() {
+        // --- ระบบแผนที่เรดาร์รวมร่าง (Leaflet + RainViewer) ---
+        let radarLayer = null, radarFrames = [], radarPastCount = 0, radarIndex = 0;
+        let radarHost = '', radarTimer = null, radarPlaying = false;
+
+        async function initMapAndRadar() {
             if (leafletMap !== null) {
                 leafletMap.remove();
                 leafletMap = null;
+                clearInterval(radarTimer);
+                radarPlaying = false;
             }
-            leafletMap = L.map('farm-map', { zoomControl: false, dragging: false, scrollWheelZoom: false });
+
+            // 1. สร้าง Map & ขอบเขตสวน
+            leafletMap = L.map('farm-map', { zoomControl: false, dragging: false, scrollWheelZoom: false }).setView([LAT, LON], 11);
             L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', { maxZoom: 20, attribution: '© Google' }).addTo(leafletMap);
+            
             const polygon = L.polygon(farmBoundary, { color: '#10b981', weight: 3, fillColor: '#10b981', fillOpacity: 0.2 }).addTo(leafletMap);
-            leafletMap.fitBounds(polygon.getBounds());
+            // ใส่หมุดให้เห็นชัดๆ เผื่อซูมออก
+            L.marker([LAT, LON]).addTo(leafletMap).bindPopup('🌾 แปลงสวนคุณพ่อ');
+
             document.getElementById('map-overlay').classList.remove('hidden');
-        }
 
-        function unlockMap() {
-            if (leafletMap) {
-                leafletMap.dragging.enable();
-                document.getElementById('map-overlay').classList.add('hidden');
-            }
-        }
-
-        // --- เรดาร์ฝนจริงจาก RainViewer (ข้อมูลสังเกตการณ์ ไม่ใช่โมเดล) ---
-        let radarMap = null, radarLayer = null, radarFrames = [], radarPastCount = 0;
-        let radarIndex = 0, radarHost = '', radarTimer = null, radarPlaying = false;
-
-        async function initRadar() {
-            clearInterval(radarTimer);
-            radarPlaying = false;
-            if (radarMap !== null) { radarMap.remove(); radarMap = null; }
-
-            radarMap = L.map('radar-map', { zoomControl: true, dragging: true, scrollWheelZoom: false }).setView([LAT, LON], 8);
-            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-                maxZoom: 18, subdomains: 'abcd', attribution: '© CARTO, © OpenStreetMap'
-            }).addTo(radarMap);
-            L.circleMarker([LAT, LON], { radius: 6, color: '#f43f5e', weight: 2, fillColor: '#f43f5e', fillOpacity: 1 })
-                .addTo(radarMap).bindPopup('📍 สวนคุณพ่อ');
-
+            // 2. ดึงข้อมูลเรดาร์ RainViewer มาเตรียมไว้
             const statusEl = document.getElementById('radar-status');
-            statusEl.innerText = 'กำลังโหลดข้อมูลเรดาร์จริง...';
-
+            statusEl.innerText = 'กำลังโหลดกลุ่มฝนจริง...';
             try {
                 const res = await fetch('https://api.rainviewer.com/public/weather-maps.json');
                 const data = await res.json();
@@ -278,38 +243,43 @@
                 radarFrames = [...past, ...nowcast];
                 radarPastCount = past.length;
 
-                if (radarFrames.length === 0) throw new Error('no frames');
-
-                radarIndex = radarPastCount > 0 ? radarPastCount - 1 : 0;
-                const slider = document.getElementById('radar-slider');
-                slider.max = radarFrames.length - 1;
-                slider.value = radarIndex;
-
-                renderRadarFrame();
-                document.getElementById('radar-frame-count').innerText =
-                    `${past.length} เฟรมย้อนหลัง (สังเกตการณ์จริง) + ${nowcast.length} เฟรมคาดการณ์ระยะสั้น (~10 นาที/เฟรม)`;
-                statusEl.innerText = '';
-                playRadar();
+                if (radarFrames.length > 0) {
+                    radarIndex = radarPastCount > 0 ? radarPastCount - 1 : 0;
+                    document.getElementById('radar-slider').max = radarFrames.length - 1;
+                    document.getElementById('radar-controls').classList.remove('hidden');
+                    document.getElementById('radar-controls').classList.add('flex');
+                    renderRadarFrame();
+                    statusEl.innerText = 'โหลดสำเร็จ (กดเล่นเพื่อดูทิศทางฝน)';
+                }
             } catch (e) {
-                statusEl.innerText = '⚠️ โหลดเรดาร์ไม่สำเร็จ (เครือข่ายขัดข้องหรือ RainViewer ไม่ตอบสนอง)';
+                statusEl.innerText = '⚠️ ไม่สามารถโหลดเรดาร์ได้ในขณะนี้';
+            }
+        }
+
+        function unlockMap() {
+            if (leafletMap) {
+                leafletMap.dragging.enable();
+                leafletMap.zoomControl = new L.Control.Zoom({ position: 'topright' }).addTo(leafletMap);
+                document.getElementById('map-overlay').classList.add('hidden');
             }
         }
 
         function renderRadarFrame() {
             const frame = radarFrames[radarIndex];
-            if (!frame || !radarMap) return;
-            if (radarLayer) radarMap.removeLayer(radarLayer);
-            radarLayer = L.tileLayer(`${radarHost}${frame.path}/256/{z}/{x}/{y}/2/1_1.png`, { opacity: 0.75 }).addTo(radarMap);
+            if (!frame || !leafletMap) return;
+            if (radarLayer) leafletMap.removeLayer(radarLayer);
+            
+            // แผ่นสีเรดาร์ฝน 
+            radarLayer = L.tileLayer(`${radarHost}${frame.path}/256/{z}/{x}/{y}/2/1_1.png`, { opacity: 0.7, zIndex: 10 }).addTo(leafletMap);
 
             const d = new Date(frame.time * 1000);
             const timeStr = d.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
             const isForecast = radarIndex >= radarPastCount;
             const label = document.getElementById('radar-time-label');
-            label.innerText = isForecast ? `⏩ คาดการณ์ ${timeStr} น.` : `🕐 จริง ${timeStr} น.`;
-            label.className = isForecast ? "text-xs font-bold text-amber-300 whitespace-nowrap" : "text-xs font-bold text-cyan-300 whitespace-nowrap";
+            label.innerText = isForecast ? `⏩ คาดการณ์ ${timeStr}` : `🕐 จริง ${timeStr}`;
+            label.className = isForecast ? "text-xs font-bold text-amber-400 whitespace-nowrap w-24 text-right" : "text-xs font-bold text-cyan-300 whitespace-nowrap w-24 text-right";
 
-            const slider = document.getElementById('radar-slider');
-            if (slider) slider.value = radarIndex;
+            document.getElementById('radar-slider').value = radarIndex;
         }
 
         function playRadar() {
@@ -320,7 +290,7 @@
             radarTimer = setInterval(() => {
                 radarIndex = (radarIndex + 1) % radarFrames.length;
                 renderRadarFrame();
-            }, 600);
+            }, 700);
         }
 
         function pauseRadar() {
@@ -339,44 +309,38 @@
             renderRadarFrame();
         }
 
+        // --- ระบบ Utility ---
         function getWeatherDescription(code, isNight) {
             const codes = {
-                0: isNight ? "ท้องฟ้าโปร่ง/ไร้เมฆ 🌙" : "แดดจัด ☀️", 
-                1: isNight ? "แจ่มใส มีเมฆบางส่วน 🌙" : "มีเมฆบางส่วน 🌤️", 
-                2: "มีเมฆเป็นบางส่วน ⛅", 
-                3: "เมฆเต็มท้องฟ้า ☁️",
-                45: "มีหมอกลง 🌫️", 48: "หมอกหนา 🌫️", 51: "ฝนละอองเบาบาง 🌦️", 53: "ฝนตกปรอยๆ 🌦️",
+                0: isNight ? "ฟ้าโปร่ง 🌙" : "แดดจัด/ฟ้าใส ☀️", 
+                1: isNight ? "มีเมฆบางส่วน 🌙" : "มีเมฆบางส่วน 🌤️", 
+                2: "มีเมฆเป็นบางส่วน ⛅", 3: "เมฆเต็มท้องฟ้า ☁️",
+                45: "มีหมอก 🌫️", 48: "หมอกหนา 🌫️", 51: "ฝนปรอยๆ 🌦️", 53: "ฝนตกปรอยๆ 🌦️",
                 55: "ฝนละอองหนาแน่น 🌧️", 61: "ฝนตกเล็กน้อย 🌧️", 63: "ฝนตกปานกลาง 🌧️", 65: "ฝนตกหนัก 🌧️⚡",
-                80: "ฝนซาเบาบาง 🌦️", 81: "ฝนซาปานกลาง 🌧️", 82: "ฝนซาหนักมาก 🌧️⚡", 95: "พายุฝนฟ้าคะนอง ⛈️", 
-                96: "พายุฝนมีลูกเห็บ ⛈️", 99: "พายุฝนฟ้าคะนองลูกเห็บตกหนัก ⛈️🚨"
+                80: "ฝนซาเบาบาง 🌦️", 81: "ฝนซา 🌧️", 82: "ฝนซาหนัก 🌧️⚡", 95: "พายุฝนฟ้าคะนอง ⛈️", 
+                96: "พายุฝนลูกเห็บ ⛈️", 99: "พายุฝนลูกเห็บตกหนัก ⛈️🚨"
             };
-            return codes[code] || "สภาพอากาศทั่วไป 🌤️";
+            return codes[code] || "สภาพอากาศทั่วไป";
         }
 
         function getWindFeel(speed) {
-            if (speed <= 5) return "🍃 ลมแผ่วเบา (อากาศนิ่ง)";
-            if (speed <= 15) return "🍃 ลมพัดอ่อนๆ (โกรกสบาย)";
-            if (speed <= 25) return "⚠️ ลมปานกลาง (ระวังละอองยาปลิว)";
-            if (speed <= 40) return "🌬️ ลมแรงจัด (กิ่งไม้โยก)";
-            return "🚨 ลมพายุพัดแรง (งดเข้าสวน)";
+            if (speed <= 5) return "🍃 ลมสงบ ฝุ่นไม่ฟุ้ง";
+            if (speed <= 15) return "🍃 ลมพัดโกรกสบาย ทำงานดี";
+            if (speed <= 25) return "⚠️ ลมปานกลาง ระวังฝุ่นดินฟุ้ง";
+            if (speed <= 40) return "🌬️ ลมแรงจัด พักงานที่สูง";
+            return "🚨 ลมพายุพัดแรง งดเข้าสวน!";
         }
 
-        function toggleCompass() {
-            if (compassActive) stopCompass(); else startCompass();
-        }
-
+        // --- ระบบเข็มทิศ ---
+        function toggleCompass() { if (compassActive) stopCompass(); else startCompass(); }
         function startCompass() {
             if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-                DeviceOrientationEvent.requestPermission()
-                    .then(permissionState => {
-                        if (permissionState === 'granted') activateCompass();
-                        else alert("กรุณาอนุญาตให้ระบบเข้าถึงเซ็นเซอร์เพื่อเปิดเข็มทิศครับ");
-                    }).catch(console.error);
-            } else {
-                activateCompass();
-            }
+                DeviceOrientationEvent.requestPermission().then(permissionState => {
+                    if (permissionState === 'granted') activateCompass();
+                    else alert("กรุณาอนุญาตระบบเซ็นเซอร์เข็มทิศครับ");
+                }).catch(console.error);
+            } else { activateCompass(); }
         }
-
         function activateCompass() {
             compassActive = true;
             document.getElementById('compass-btn').innerText = "❌ ปิดเข็มทิศ (ประหยัดแบต)";
@@ -389,17 +353,12 @@
                 if (typeof heading === 'undefined' || heading === null) heading = 360 - event.alpha;
                 if (heading !== null) document.getElementById('compass-dial').style.transform = `rotate(${-heading}deg)`;
             };
-
-            if ('ondeviceorientationabsolute' in window) {
-                window.addEventListener('deviceorientationabsolute', orientationHandler);
-            } else {
-                window.addEventListener('deviceorientation', orientationHandler);
-            }
+            if ('ondeviceorientationabsolute' in window) window.addEventListener('deviceorientationabsolute', orientationHandler);
+            else window.addEventListener('deviceorientation', orientationHandler);
         }
-
         function stopCompass() {
             compassActive = false;
-            document.getElementById('compass-btn').innerText = "🧭 เปิดเข็มทิศหมุนตามมือถือ";
+            document.getElementById('compass-btn').innerText = "🧭 เปิดเข็มทิศหมุนตามมือถือ (ดูทิศลม)";
             document.getElementById('compass-btn').className = "w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2.5 rounded-xl text-sm shadow-md transition";
             document.getElementById('compass-ui').classList.add('hidden');
             document.getElementById('compass-ui').classList.remove('flex');
@@ -410,6 +369,7 @@
             }
         }
 
+        // --- ระบบ Auto Refresh ---
         function startTimer() {
             clearInterval(timerInterval);
             countdownSeconds = 600;
@@ -422,16 +382,12 @@
                 updateRelativeTime();
             }, 1000);
         }
-
         function updateRelativeTime() {
             if (!lastFetchTime) return;
             const diffMin = Math.floor((new Date() - lastFetchTime) / 60000);
-            document.getElementById('last-updated').innerText = diffMin < 1 ? "อัปเดตข้อมูลสภาพอากาศ: เมื่อสักครู่นี้" : `อัปเดตข้อมูลสภาพอากาศ: ${diffMin} นาทีที่แล้ว`;
+            document.getElementById('last-updated').innerText = diffMin < 1 ? "อัปเดตล่าสุด: เมื่อสักครู่นี้" : `อัปเดตล่าสุด: ${diffMin} นาทีที่แล้ว`;
         }
 
-        // แก้บั๊ก DataCloneError: AbortController.signal เป็นอ็อบเจกต์ที่ structured-clone ไม่ได้
-        // ใน sandbox บางแบบ (เช่นตัวพรีวิวไฟล์ในแชท) ทำให้ fetch พังทันทีก่อนยิง request จริง
-        // แก้โดยจับเวลาด้วย Promise.race แทนการส่ง signal เข้าไปใน fetch โดยตรง
         function fetchWithTimeout(url, timeoutMs) {
             const timeoutPromise = new Promise((_, reject) => {
                 setTimeout(() => {
@@ -449,52 +405,18 @@
             const month = String(now.getMonth() + 1).padStart(2, '0');
             const day = String(now.getDate()).padStart(2, '0');
             const todayLocalStr = `${year}-${month}-${day}`;
-            
             const index = dailyTimeArray.findIndex(d => d.startsWith(todayLocalStr));
             return index !== -1 ? index : 0;
         }
 
-        // --- แก้บั๊ก Timezone ISO Cutoff ของพรุ่งนี้ ---
-        function getTomorrowRainTimeSummary(hourlyData) {
-            const tomorrow = new Date();
-            tomorrow.setDate(tomorrow.getDate() + 1);
-            
-            const year = tomorrow.getFullYear();
-            const month = String(tomorrow.getMonth() + 1).padStart(2, '0');
-            const day = String(tomorrow.getDate()).padStart(2, '0');
-            const tomorrowLocalStr = `${year}-${month}-${day}`;
-
-            let morningProb = 0;   // 06:00 - 12:00
-            let afternoonProb = 0; // 12:00 - 18:00
-            let eveningProb = 0;   // 18:00 - 24:00
-
-            for (let i = 0; i < hourlyData.time.length; i++) {
-                if (hourlyData.time[i].startsWith(tomorrowLocalStr)) {
-                    const hour = new Date(hourlyData.time[i]).getHours();
-                    const prob = hourlyData.precipitation_probability[i];
-
-                    if (hour >= 6 && hour < 12) morningProb = Math.max(morningProb, prob);
-                    else if (hour >= 12 && hour < 18) afternoonProb = Math.max(afternoonProb, prob);
-                    else if (hour >= 18) eveningProb = Math.max(eveningProb, prob);
-                }
-            }
-
-            const times = [];
-            if (morningProb >= 50) times.push("ช่วงเช้า");
-            if (afternoonProb >= 50) times.push("ช่วงบ่าย");
-            if (eveningProb >= 50) times.push("ช่วงค่ำ/ดึก");
-
-            if (times.length > 0) return `พรุ่งนี้มีโอกาสฝนตก${times.join('และ')}`;
-            return "พรุ่งนี้ฝนตกบางพื้นที่";
-        }
-
+        // --- Core Application Logic ---
         async function fetchWeather() {
             document.getElementById('loading').classList.remove('hidden');
             document.getElementById('content').classList.add('hidden');
             document.getElementById('error-state').classList.add('hidden');
 
             try {
-                const url = `https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,wind_speed_10m,wind_direction_10m,weather_code&hourly=temperature_2m,precipitation_probability,precipitation,weather_code,uv_index&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,et0_fao_evapotranspiration,sunrise,sunset,uv_index_max&timezone=Asia%2FBangkok&forecast_days=3&models=best_match`;
+                const url = `https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,wind_speed_10m,wind_direction_10m,weather_code&hourly=temperature_2m,precipitation_probability,precipitation,weather_code,uv_index&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,sunrise,sunset,uv_index_max&timezone=Asia%2FBangkok&forecast_days=3`;
                 
                 const response = await fetchWithTimeout(url, 10000);
                 if (!response.ok) throw new Error("API Error");
@@ -506,122 +428,142 @@
                 
                 const todayIdx = getTodayIndex(daily.time);
                 lastFetchTime = new Date();
-
-                // --- แก้บั๊ก UV Index & กลางคืน รอยต่อเที่ยงคืน ---
                 const now = new Date();
-                const nowMinutes = now.getHours() * 60 + now.getMinutes();
 
+                // 1. ตรวจสอบเวลากลางคืน & UV ปัจจุบัน
+                const nowMinutes = now.getHours() * 60 + now.getMinutes();
                 const sunriseDate = new Date(daily.sunrise[todayIdx]);
                 const sunsetDate = new Date(daily.sunset[todayIdx]);
                 const sunriseMinutes = sunriseDate.getHours() * 60 + sunriseDate.getMinutes();
                 const sunsetMinutes = sunsetDate.getHours() * 60 + sunsetDate.getMinutes();
-
                 const isNight = nowMinutes < sunriseMinutes || nowMinutes > sunsetMinutes;
 
+                let currentHourIdx = todayIdx * 24 + now.getHours();
+                if (currentHourIdx < 0 || currentHourIdx >= hourly.time.length) currentHourIdx = 0;
+                const currentUV = isNight ? 0 : (hourly.uv_index[currentHourIdx] || 0);
+
+                // --- 2. อุดบั๊ก "ฝนทิพย์" (Sunny but Raining) ---
+                // จะถือว่าฝนตกจริง ก็ต่อเมื่อ precipitation >= 0.5 (มากกว่าฝนปรอยติดเซ็นเซอร์) 
+                // หรือ weather_code บ่งบอกว่าตกหนักชัวร์ๆ (>=61) และมีค่าฝน > 0
+                const isHeavyRainCode = [61,63,65,80,81,82,95,96,99].includes(current.weather_code);
+                const isRainingStrict = current.precipitation >= 0.5 || (isHeavyRainCode && current.precipitation > 0);
+
+                // 3. วิเคราะห์ป้ายสถานะ "ความพร้อมลุยงาน" (Workability Banner)
+                const bannerEl = document.getElementById('workability-banner');
+                let bannerClass = "";
+                let bannerHtml = "";
+
+                if (isRainingStrict) {
+                    bannerClass = "bg-rose-950/80 border-rose-600 text-rose-200";
+                    bannerHtml = `🔴 <b>งดทำงานกลางแจ้ง (ฝนตก)</b><br><span class="text-sm font-medium text-rose-300">ฝนกำลังตก ดินเละและลื่น เสี่ยงอันตราย</span>`;
+                } else if (current.apparent_temperature >= 38 || current.temperature_2m >= 35) {
+                    bannerClass = "bg-rose-950/80 border-rose-600 text-rose-200";
+                    bannerHtml = `🔴 <b>งดทำงาน (แดดร้อนจัดอันตราย)</b><br><span class="text-sm font-medium text-rose-300">ความร้อนรู้สึกจริง ${current.apparent_temperature}°C เสี่ยงฮีทสโตรก พักเข้าร่มด่วน!</span>`;
+                } else if (current.apparent_temperature >= 34 || currentUV >= 8) {
+                    bannerClass = "bg-amber-950/80 border-amber-500 text-amber-200";
+                    bannerHtml = `🟡 <b>ทำงานได้ แต่ระวังแดด/ความร้อน</b><br><span class="text-sm font-medium text-amber-300">แดดเริ่มแรง ควรหาที่ร่มพักจิบน้ำบ่อยๆ</span>`;
+                } else if (current.precipitation > 0) { // ฝนปรอยๆ < 0.5
+                    bannerClass = "bg-amber-950/80 border-amber-500 text-amber-200";
+                    bannerHtml = `🟡 <b>ระวังฝนละออง/พายุ</b><br><span class="text-sm font-medium text-amber-300">มีละอองฝนผ่าน ทำงานได้แต่เตรียมที่หลบฝน</span>`;
+                } else {
+                    bannerClass = "bg-emerald-950/80 border-emerald-500 text-emerald-200";
+                    bannerHtml = `🟢 <b>ลุยงานได้เต็มที่</b><br><span class="text-sm font-medium text-emerald-300">สภาพอากาศเป็นใจ เหมาะกับการเกลี่ยดิน/ปลูกพืช</span>`;
+                }
+                
+                bannerEl.className = `p-4 rounded-2xl shadow-lg text-center border ${bannerClass}`;
+                bannerEl.innerHTML = bannerHtml;
+
+                // 4. อัปเดตข้อมูลทั่วไป
                 document.getElementById('temp').innerText = `${current.temperature_2m}°C`;
                 document.getElementById('apparent-temp').innerText = `${current.apparent_temperature}°C`;
-                document.getElementById('weather-desc').innerText = getWeatherDescription(current.weather_code, isNight);
+                // ถ้าฝนไม่ตกจริงตาม strict rule แต่ API คืนค่ารหัสฝนปรอยมา ให้บังคับโชว์ตามรหัสแดด/เมฆ
+                let displayCode = current.weather_code;
+                if (!isRainingStrict && displayCode >= 50 && displayCode <= 59) displayCode = 2; // บังคับเป็นเมฆบางส่วนแทนฝนปรอยทิพย์
+                document.getElementById('weather-desc').innerText = getWeatherDescription(displayCode, isNight);
+                
                 document.getElementById('wind').innerText = `${current.wind_speed_10m} กม./ชม.`;
                 document.getElementById('wind-feel').innerText = getWindFeel(current.wind_speed_10m);
                 document.getElementById('wind-direction-container').style.transform = `rotate(${current.wind_direction_10m}deg)`;
 
-                const humidityVal = current.relative_humidity_2m;
-                document.getElementById('humidity').innerText = `${humidityVal}%`;
-                const fungusBox = document.getElementById('fungus-risk');
-                if (humidityVal >= 80) {
-                    fungusBox.className = "text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-900 text-rose-200 border border-rose-700";
-                    fungusBox.innerText = "⚠️ ชื้นสูง เสี่ยงโรคเชื้อรา";
-                } else if (humidityVal >= 65) {
-                    fungusBox.className = "text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-900 text-amber-200 border border-amber-700";
-                    fungusBox.innerText = "⚡ เฝ้าระวังเชื้อรา";
-                } else {
-                    fungusBox.className = "text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-900 text-emerald-200 border border-emerald-700";
-                    fungusBox.innerText = "✅ อากาศแห้ง ปลอดภัย";
-                }
+                document.getElementById('humidity').innerText = `${current.relative_humidity_2m}%`;
+                document.getElementById('rain-sum').innerText = `${daily.precipitation_sum[todayIdx]}`;
 
-                const nowMs = now.getTime();
-                // แก้บั๊ก: เดิมใช้ findIndex(time >= now - 1hr) ซึ่งบางจังหวะจะชี้ไปที่ชั่วโมงที่ผ่านไปแล้ว
-                // ใหม่: คำนวณ index ตรงๆ จาก (index ของวันนี้ x 24) + ชั่วโมงปัจจุบัน เพราะ Open-Meteo คืนข้อมูลรายชั่วโมง 24 จุด/วัน เริ่มเที่ยงคืนเสมอ
-                let currentHourIdx = todayIdx * 24 + now.getHours();
-                if (currentHourIdx < 0 || currentHourIdx >= hourly.time.length) currentHourIdx = 0;
-                
-                const currentUV = isNight ? 0 : (hourly.uv_index[currentHourIdx] || 0);
+                // UV
                 document.getElementById('uv-index').innerText = currentUV.toFixed(1);
-                
                 const uvAdvice = document.getElementById('uv-advice');
                 if (isNight) {
-                    uvAdvice.innerText = "🌙 กลางคืน ปลอดภัยจาก UV";
-                    uvAdvice.className = "text-[10px] font-bold text-slate-400";
+                    uvAdvice.innerText = "🌙 ปลอดรังสี UV"; uvAdvice.className = "text-[10px] font-bold text-slate-400";
                 } else if (currentUV >= 8) {
-                    uvAdvice.innerText = "🚨 แดดจัด ควรหลบแดด";
-                    uvAdvice.className = "text-[10px] font-bold text-rose-300";
+                    uvAdvice.innerText = "🚨 แดดจัดอันตราย"; uvAdvice.className = "text-[10px] font-bold text-rose-300";
                 } else if (currentUV >= 5) {
-                    uvAdvice.innerText = "☀️ แดดปานกลาง ควรใส่หมวก";
-                    uvAdvice.className = "text-[10px] font-bold text-amber-300";
+                    uvAdvice.innerText = "☀️ แดดแรง ควรใส่หมวก"; uvAdvice.className = "text-[10px] font-bold text-amber-300";
                 } else {
-                    uvAdvice.innerText = "🌤️ แดดอ่อนๆ ปลอดภัย";
-                    uvAdvice.className = "text-[10px] font-bold text-emerald-300";
+                    uvAdvice.innerText = "🌤️ แดดกำลังดี"; uvAdvice.className = "text-[10px] font-bold text-emerald-300";
                 }
 
-                const sunriseTime = sunriseDate.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
-                const sunsetTime = sunsetDate.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
-                document.getElementById('sunrise').innerText = sunriseTime;
-                document.getElementById('sunset').innerText = sunsetTime;
+                document.getElementById('sunrise').innerText = sunriseDate.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) + ' น.';
+                document.getElementById('sunset').innerText = sunsetDate.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) + ' น.';
 
-                const alertBox = document.getElementById('live-rain-alert');
-                const isRaining = current.precipitation > 0 || [51,53,55,61,63,65,80,81,82,95,96,99].includes(current.weather_code);
+                // 5. ไกด์ตารางเวลาลุยงานวันนี้ (Daily Work Windows)
+                const workWindowsEl = document.getElementById('daily-work-windows');
+                workWindowsEl.innerHTML = '';
                 
-                if (isRaining) {
-                    alertBox.innerHTML = `
-                        <div class="bg-rose-600 border border-rose-400 text-white p-4 rounded-2xl text-center shadow-lg animate-pulse">
-                            <div class="text-2xl font-extrabold mb-1">🌧️ ฝนกำลังตก!</div>
-                            <div class="text-rose-100 text-sm font-semibold">วันนี้มีปริมาณฝนแล้ว ${daily.precipitation_sum[todayIdx]} มม.</div>
+                // แบ่งช่วง: เช้า (06-11), กลางวัน (11-15), เย็น (15-18)
+                const periods = [
+                    { name: 'ช่วงเช้า (06:00-11:00)', start: 6, end: 11, icon: '⛅' },
+                    { name: 'ช่วงเที่ยง-บ่าย (11:00-15:00)', start: 11, end: 15, icon: '☀️' },
+                    { name: 'ช่วงเย็น (15:00-18:00)', start: 15, end: 18, icon: '🌇' }
+                ];
+
+                const currentHour = now.getHours();
+
+                periods.forEach(p => {
+                    let maxTemp = 0;
+                    let maxPop = 0;
+                    let isPast = currentHour >= p.end;
+                    let isCurrent = currentHour >= p.start && currentHour < p.end;
+
+                    for (let h = p.start; h < p.end; h++) {
+                        let idx = todayIdx * 24 + h;
+                        if(idx < hourly.temperature_2m.length) {
+                            maxTemp = Math.max(maxTemp, hourly.temperature_2m[idx]);
+                            maxPop = Math.max(maxPop, hourly.precipitation_probability[idx]);
+                        }
+                    }
+
+                    let statusText = "ลุยงานได้ดี";
+                    let statusColor = "text-emerald-400";
+                    if (maxPop >= 60) {
+                        statusText = "เสี่ยงฝนตก"; statusColor = "text-blue-400";
+                    } else if (maxTemp >= 35) {
+                        statusText = "แดดร้อนจัด/พักในร่ม"; statusColor = "text-rose-400";
+                    } else if (maxTemp >= 33) {
+                        statusText = "แดดแรงระวังร้อน"; statusColor = "text-amber-400";
+                    }
+
+                    let opacity = isPast ? 'opacity-40' : 'opacity-100';
+                    let bg = isCurrent ? 'bg-slate-600/60 border-emerald-500/50' : 'bg-slate-700/40 border-slate-600/50';
+
+                    workWindowsEl.innerHTML += `
+                        <div class="flex items-center justify-between p-2 rounded-lg border ${bg} ${opacity}">
+                            <div class="flex items-center gap-2">
+                                <span class="text-lg">${p.icon}</span>
+                                <span class="text-xs font-bold text-slate-200">${p.name}</span>
+                            </div>
+                            <div class="text-right">
+                                <div class="text-[11px] font-bold ${statusColor}">${statusText}</div>
+                                <div class="text-[10px] text-slate-400">อุณหภูมิ ${maxTemp.toFixed(0)}°C | ฝน ${maxPop}%</div>
+                            </div>
                         </div>
                     `;
-                } else {
-                    alertBox.innerHTML = `
-                        <div class="bg-emerald-600/80 border border-emerald-500 text-white p-3 rounded-2xl text-center shadow-md">
-                            <div class="text-lg font-bold">☀️ ขณะนี้ฝนไม่ตก</div>
-                        </div>
-                    `;
-                }
+                });
 
-                const et0Today = daily.et0_fao_evapotranspiration[todayIdx];
-                const rainSumToday = daily.precipitation_sum[todayIdx];
-                
-                // --- แก้บั๊ก Array Out of Bounds ---
-                const nextDayIdx = Math.min(todayIdx + 1, daily.precipitation_probability_max.length - 1);
-                const tomorrowRainProb = daily.precipitation_probability_max[nextDayIdx] || 0;
-                const tomorrowRainTimeText = getTomorrowRainTimeSummary(hourly);
-                
-                let savedDeficit = parseFloat(localStorage.getItem('water_deficit') || "0");
-                const todayDateStr = now.toDateString();
-                const lastSavedDate = localStorage.getItem('last_calc_date');
-                
-                if (lastSavedDate !== todayDateStr) {
-                    savedDeficit = savedDeficit + (et0Today - rainSumToday);
-                    if (savedDeficit < 0) savedDeficit = 0; 
-                    localStorage.setItem('water_deficit', savedDeficit.toFixed(2));
-                    localStorage.setItem('last_calc_date', todayDateStr);
-                }
-
-                const waterGuide = document.getElementById('water-guide');
-                
-                if (isRaining || rainSumToday >= et0Today || savedDeficit === 0) {
-                    waterGuide.className = "p-4 rounded-2xl border shadow-md font-bold text-center bg-rose-950/80 border-rose-600 text-rose-200";
-                    waterGuide.innerHTML = `🔴 วันนี้ไม่ต้องรดน้ำ<br><span class="text-sm font-medium text-rose-300">(ความชื้นในดินเพียงพอแล้ว พักได้เลย)</span>`;
-                } else if (tomorrowRainProb > 60) {
-                    waterGuide.className = "p-4 rounded-2xl border shadow-md font-bold text-center bg-amber-950/80 border-amber-600 text-amber-200";
-                    waterGuide.innerHTML = `🟡 รดน้ำแค่ครึ่งเดียวพอ<br><span class="text-sm font-medium text-amber-300">(${tomorrowRainTimeText} โอกาสฝน ${tomorrowRainProb}%)</span>`;
-                } else {
-                    waterGuide.className = "p-4 rounded-2xl border shadow-md font-bold text-center bg-emerald-950/80 border-emerald-600 text-emerald-200";
-                    waterGuide.innerHTML = `🟢 วันนี้ต้องรดน้ำ<br><span class="text-sm font-medium text-emerald-300">(แนะนำลากสายยางรดช่วงเช้า หรือรดเย็นก่อน ${sunsetTime} น.)</span>`;
-                }
-
+                // 6. การ์ดรายชั่วโมง 6 ชม
                 const hourlyContainer = document.getElementById('hourly-container');
                 hourlyContainer.innerHTML = '';
                 
-                const startIndex = currentHourIdx;
+                let startIndex = hourly.time.findIndex(t => new Date(t).getTime() >= now.getTime() - 3600000);
+                if (startIndex === -1) startIndex = 0;
 
                 for (let i = startIndex; i < Math.min(startIndex + 6, hourly.time.length); i++) {
                     const hourDate = new Date(hourly.time[i]);
@@ -644,53 +586,28 @@
                     `;
                 }
 
-                const dailyContainer = document.getElementById('daily-forecast-container');
-                dailyContainer.innerHTML = '';
-                const dayLabels = ["พรุ่งนี้", "มะรืนนี้"];
-
-                for (let i = todayIdx + 1; i <= todayIdx + 2 && i < daily.time.length; i++) {
-                    const label = dayLabels[i - (todayIdx + 1)];
-                    const rainProb = daily.precipitation_probability_max[i];
-                    const rainSum = daily.precipitation_sum[i];
-                    const tempMax = daily.temperature_2m_max[i];
-                    const tempMin = daily.temperature_2m_min[i];
-
-                    dailyContainer.innerHTML += `
-                        <div class="bg-slate-700/40 p-3 rounded-2xl border border-slate-600 text-center">
-                            <div class="text-xs text-emerald-400 font-bold mb-1">${label}</div>
-                            <div class="text-sm font-extrabold text-slate-200">${tempMin}°C - ${tempMax}°C</div>
-                            <div class="text-xs text-blue-300 font-bold mt-1">☔ โอกาสฝน ${rainProb}%</div>
-                            <div class="text-[11px] text-slate-400 mt-0.5">ปริมาณฝน ~${rainSum} มม.</div>
-                        </div>
-                    `;
-                }
-
                 document.getElementById('loading').classList.add('hidden');
                 document.getElementById('content').classList.remove('hidden');
 
-                setTimeout(() => { initMap(); initRadar(); }, 100);
+                // เรียกโหลด Map และ Radar รวมร่าง
+                setTimeout(() => { initMapAndRadar(); }, 100);
                 startTimer();
 
             } catch (error) {
                 document.getElementById('loading').classList.add('hidden');
                 document.getElementById('error-state').classList.remove('hidden');
                 if (error.name === 'AbortError') {
-                    document.getElementById('error-msg').innerText = "การเชื่อมต่อใช้เวลานานเกินไป (Timeout 10s) กรุณาลองใหม่อีกครั้ง";
-                } else {
-                    // แสดงรายละเอียด error จริงเพื่อช่วยวินิจฉัย (เช่น CORS, TypeError: Failed to fetch, DNS)
-                    document.getElementById('error-msg').innerText =
-                        `ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์สภาพอากาศได้ กรุณาตรวจสอบอินเทอร์เน็ต\n[รายละเอียด: ${error.name || 'Error'}: ${error.message || error}]`;
-                    console.error('fetchWeather failed:', error);
+                    document.getElementById('error-msg').innerText = "การเชื่อมต่อใช้เวลานานเกินไป กรุณาลองใหม่อีกครั้ง";
                 }
             }
         }
 
+        // Service Worker
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 const swCode = `self.addEventListener('fetch', function(e) {});`;
                 const blob = new Blob([swCode], { type: 'text/javascript' });
-                const swUrl = URL.createObjectURL(blob);
-                navigator.serviceWorker.register(swUrl).catch(()=>{});
+                navigator.serviceWorker.register(URL.createObjectURL(blob)).catch(()=>{});
             });
         }
 
